@@ -66,15 +66,32 @@ def create_llm(
 def create_embeddings(model: str | None = None) -> OpenAIEmbeddings:
     """Create an embeddings client.
 
-    Supports OpenAI format and Gemini via OpenAI-compatible API.
-    Configuration via environment variables:
-      - LLM_PROVIDER: 'openai' (default) or 'gemini'
-      - OPENAI_API_KEY / GEMINI_API_KEY
-      - OPENAI_BASE_URL / GEMINI_BASE_URL (optional)
-      - EMBEDDING_MODEL: default embedding model name
-    """
-    provider = get_llm_provider()
+    Embedding provider is configured independently from LLM provider.
+    Priority: SiliconFlow > LLM_PROVIDER-specific config.
 
+    SiliconFlow (recommended for embeddings):
+      - SILICONFLOW_API_KEY
+      - SILICONFLOW_BASE_URL  (default: https://api.siliconflow.cn/v1)
+      - SILICONFLOW_EMBEDDING_MODEL  (default: BAAI/bge-m3)
+
+    Fallback follows LLM_PROVIDER:
+      - openai: OPENAI_API_KEY / OPENAI_BASE_URL / EMBEDDING_MODEL
+      - gemini:  GEMINI_API_KEY / GEMINI_BASE_URL / EMBEDDING_MODEL
+    """
+    # SiliconFlow takes priority if API key is set
+    sf_api_key = os.getenv("SILICONFLOW_API_KEY")
+    if sf_api_key:
+        base_url = os.getenv("SILICONFLOW_BASE_URL", "https://api.siliconflow.cn/v1")
+        default_model = os.getenv("SILICONFLOW_EMBEDDING_MODEL", "BAAI/bge-m3")
+        resolved_model = model or default_model
+        return OpenAIEmbeddings(
+            model=resolved_model,
+            api_key=sf_api_key,
+            base_url=base_url,
+        )
+
+    # Fallback: use LLM provider's credentials
+    provider = get_llm_provider()
     if provider == "openai":
         api_key = os.getenv("OPENAI_API_KEY")
         base_url = os.getenv("OPENAI_BASE_URL")

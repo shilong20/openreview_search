@@ -138,7 +138,7 @@ def evaluate_relevance(
     Args:
         papers: List of paper dicts (already pre-filtered by hybrid search)
         research_description: Natural language description of research interests
-        top_k: Number of papers to evaluate with LLM
+        top_k: Number of papers to return after LLM reranking
         max_concurrent: Max concurrent LLM calls
         model: LLM model name (uses env default if None)
 
@@ -158,5 +158,8 @@ def evaluate_relevance(
     )
 
     evaluated.sort(key=lambda p: p.get("relevance_score", 0.0), reverse=True)
-    logger.success(f"Evaluation complete. Top score: {evaluated[0].get('relevance_score', 0):.2f}" if evaluated else "No papers evaluated")
-    return evaluated
+    if evaluated:
+        logger.success(f"Evaluation complete. Top score: {evaluated[0].get('relevance_score', 0):.2f}")
+    else:
+        logger.success("No papers evaluated")
+    return evaluated[:top_k]
