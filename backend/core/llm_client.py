@@ -9,6 +9,23 @@ from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 load_dotenv()
 
 
+def extract_text(content: str | list) -> str:
+    """Extract plain text from LLM response content.
+
+    Handles both plain string and structured block list
+    (e.g. [{'type': 'text', 'text': '...'}]) returned by some providers.
+    """
+    if isinstance(content, str):
+        return content
+    parts = []
+    for block in content:
+        if isinstance(block, dict):
+            parts.append(block.get("text", ""))
+        elif isinstance(block, str):
+            parts.append(block)
+    return "".join(parts)
+
+
 def get_llm_provider() -> str:
     """Detect LLM provider from environment variables."""
     provider = os.getenv("LLM_PROVIDER", "openai").lower()

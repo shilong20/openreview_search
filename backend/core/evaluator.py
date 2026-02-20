@@ -8,7 +8,7 @@ from typing import Any
 from langchain_core.messages import HumanMessage, SystemMessage
 from loguru import logger
 
-from .llm_client import create_llm
+from .llm_client import create_llm, extract_text
 
 SYSTEM_PROMPT = """You are an expert academic paper evaluator. Your task is to assess how relevant a research paper is to a user's research interests.
 
@@ -82,7 +82,7 @@ async def _evaluate_single(
 
         try:
             response = await llm.ainvoke(messages)
-            parsed = _parse_score(response.content)
+            parsed = _parse_score(extract_text(response.content))
             relevance_score = max(0.0, min(1.0, float(parsed.get("relevance_score", 0.0))))
             relevance_reason = parsed.get("relevance_reason", "")
         except Exception as e:
