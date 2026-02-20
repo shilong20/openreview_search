@@ -8,9 +8,9 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from loguru import logger
 
-from ..core.venues import get_supported_venues
-from ..core.fetcher import fetch_papers, is_cached, get_cache_metadata
-from ..core.indexer import build_index, is_indexed
+from ..core.venues import get_supported_venues, VENUES
+from ..core.fetcher import fetch_papers, is_cached, get_cache_metadata, list_cached_years
+from ..core.indexer import build_index, is_indexed, list_indexed_years
 from ..core.keyword_extractor import extract_keywords
 from ..core.search_engine import hybrid_search
 from ..core.evaluator import evaluate_relevance
@@ -67,15 +67,19 @@ class PaperResult(BaseModel):
 
 @router.get("/venues")
 def list_venues() -> list[dict]:
-    """List supported conferences and their available years."""
+    """List supported conferences with min_year and status of locally cached/indexed years."""
     venues = get_supported_venues()
     for v in venues:
-        for year in v["available_years"]:
-            v.setdefault("status", {})
-            v["status"][str(year)] = {
-                "fetched": is_cached(v["name"], year),
-                "indexed": is_indexed(v["name"], year),
+        cached_years = list_cached_years(v["name"])
+        indexed_years = list_indexed_years(v["name"])
+        all_years = sorted(set(cached_years) | set(indexed_years))
+        v["status"] = {
+            str(y): {
+                "fetched": y in cached_years,
+                "indexed": y in indexed_years,
             }
+            for y in all_years
+        }
     return venues
 
 

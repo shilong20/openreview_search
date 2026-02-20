@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { Search, Settings, Loader2 } from 'lucide-react'
 import type { Venue, SearchResult } from '../types'
 import { api } from '../api'
@@ -18,9 +18,37 @@ export function SearchPanel({ venues, onResults }: Props) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
+  const [customYear, setCustomYear] = useState('')
+  const [showCustomInput, setShowCustomInput] = useState(false)
+  const customInputRef = useRef<HTMLInputElement>(null)
+
   const currentVenue = venues.find(v => v.name === venue)
   const yearStatus = venue && year ? currentVenue?.status?.[String(year)] : null
   const canSearch = venue && year > 0 && description.trim().length >= 3 && yearStatus?.fetched
+
+  const knownYears = currentVenue
+    ? Object.keys(currentVenue.status).map(Number).sort((a, b) => b - a)
+    : []
+  const minYear = currentVenue?.min_year ?? 2024
+
+  const handleYearSelect = (val: string) => {
+    if (val === '__custom__') {
+      setShowCustomInput(true)
+      setYear(0)
+      setTimeout(() => customInputRef.current?.focus(), 50)
+    } else {
+      setShowCustomInput(false)
+      setCustomYear('')
+      setYear(Number(val))
+    }
+  }
+
+  const handleCustomYearConfirm = () => {
+    const y = parseInt(customYear, 10)
+    if (isNaN(y) || y < minYear || y > 2100) return
+    setYear(y)
+    setShowCustomInput(false)
+  }
 
   const handleSearch = async () => {
     if (!canSearch) return
@@ -66,17 +94,47 @@ export function SearchPanel({ venues, onResults }: Props) {
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Year</label>
-          <select
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
-            value={year}
-            onChange={e => setYear(Number(e.target.value))}
-            disabled={!venue}
-          >
-            <option value={0}>Select year</option>
-            {currentVenue?.available_years.map(y => (
-              <option key={y} value={y}>{y}</option>
-            ))}
-          </select>
+          {showCustomInput ? (
+            <div className="flex gap-1">
+              <input
+                ref={customInputRef}
+                type="number"
+                min={minYear}
+                max={2100}
+                placeholder={`${minYear}+`}
+                value={customYear}
+                onChange={e => setCustomYear(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleCustomYearConfirm()}
+                className="flex-1 border border-indigo-400 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+              />
+              <button
+                onClick={handleCustomYearConfirm}
+                disabled={!customYear}
+                className="px-3 py-2 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700 disabled:opacity-40"
+              >
+                OK
+              </button>
+              <button
+                onClick={() => { setShowCustomInput(false); setCustomYear('') }}
+                className="px-2 py-2 text-gray-500 hover:text-gray-700 text-sm"
+              >
+                ✕
+              </button>
+            </div>
+          ) : (
+            <select
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+              value={year || ''}
+              onChange={e => handleYearSelect(e.target.value)}
+              disabled={!venue}
+            >
+              <option value="">Select year</option>
+              {knownYears.map((y: number) => (
+                <option key={y} value={y}>{y}</option>
+              ))}
+              <option value="__custom__">＋ Add year ({minYear}+)…</option>
+            </select>
+          )}
         </div>
       </div>
 

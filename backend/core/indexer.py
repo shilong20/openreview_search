@@ -24,6 +24,23 @@ def is_indexed(venue: str, year: int) -> bool:
     return db_path.exists() and any(db_path.iterdir())
 
 
+def list_indexed_years(venue: str) -> list[int]:
+    """Return sorted list of years that have a built vector index for a venue."""
+    if not VECTOR_DB_DIR.exists():
+        return []
+    prefix = f"{venue.lower()}_"
+    years = []
+    for d in VECTOR_DB_DIR.iterdir():
+        if d.is_dir() and d.name.startswith(prefix):
+            try:
+                year = int(d.name[len(prefix):])
+                if any(d.iterdir()):
+                    years.append(year)
+            except ValueError:
+                pass
+    return sorted(years)
+
+
 def build_index(
     venue: str,
     year: int,

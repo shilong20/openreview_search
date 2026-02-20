@@ -30,6 +30,22 @@ def is_cached(venue: str, year: int) -> bool:
     return get_papers_file(venue, year).exists()
 
 
+def list_cached_years(venue: str) -> list[int]:
+    """Return sorted list of years that have cached paper data for a venue."""
+    if not STORAGE_DIR.exists():
+        return []
+    years = []
+    for d in STORAGE_DIR.iterdir():
+        if d.is_dir() and d.name.startswith(f"{venue}_"):
+            try:
+                year = int(d.name[len(venue) + 1:])
+                if (d / "all_papers.json").exists():
+                    years.append(year)
+            except ValueError:
+                pass
+    return sorted(years)
+
+
 def get_cache_metadata(venue: str, year: int) -> dict | None:
     meta_file = get_metadata_file(venue, year)
     if meta_file.exists():

@@ -6,7 +6,7 @@ export interface VenueStatus {
 export interface Venue {
   name: string
   display_name: string
-  available_years: number[]
+  min_year: number
   status: Record<string, VenueStatus>
 }
 

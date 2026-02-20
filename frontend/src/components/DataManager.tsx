@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from 'react'
-import { Download, Database, CheckCircle, AlertCircle, Loader2, RefreshCw } from 'lucide-react'
+import { useState, useEffect, useCallback, useRef } from 'react'
+import { Download, Database, CheckCircle, AlertCircle, Loader2, RefreshCw, Plus } from 'lucide-react'
 import { api } from '../api'
 import type { Venue, JobStatus } from '../types'
 
@@ -11,14 +11,42 @@ interface Props {
 export function DataManager({ venues, onVenuesChange }: Props) {
   const [selectedVenue, setSelectedVenue] = useState('')
   const [selectedYear, setSelectedYear] = useState<number>(0)
+  const [customYear, setCustomYear] = useState('')
+  const [showCustomInput, setShowCustomInput] = useState(false)
   const [fetchStatus, setFetchStatus] = useState<JobStatus | null>(null)
   const [indexStatus, setIndexStatus] = useState<JobStatus | null>(null)
   const [polling, setPolling] = useState(false)
+  const customInputRef = useRef<HTMLInputElement>(null)
 
   const currentVenue = venues.find(v => v.name === selectedVenue)
   const yearStatus = selectedVenue && selectedYear
     ? currentVenue?.status?.[String(selectedYear)]
     : null
+
+  const knownYears = currentVenue
+    ? Object.keys(currentVenue.status).map(Number).sort((a, b) => b - a)
+    : []
+
+  const minYear = currentVenue?.min_year ?? 2024
+
+  const handleYearSelect = (val: string) => {
+    if (val === '__custom__') {
+      setShowCustomInput(true)
+      setSelectedYear(0)
+      setTimeout(() => customInputRef.current?.focus(), 50)
+    } else {
+      setShowCustomInput(false)
+      setCustomYear('')
+      setSelectedYear(Number(val))
+    }
+  }
+
+  const handleCustomYearConfirm = () => {
+    const y = parseInt(customYear, 10)
+    if (isNaN(y) || y < minYear || y > 2100) return
+    setSelectedYear(y)
+    setShowCustomInput(false)
+  }
 
   const pollStatus = useCallback(async () => {
     if (!selectedVenue || !selectedYear) return
@@ -118,17 +146,50 @@ export function DataManager({ venues, onVenuesChange }: Props) {
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Year</label>
-          <select
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
-            value={selectedYear}
-            onChange={e => setSelectedYear(Number(e.target.value))}
-            disabled={!selectedVenue}
-          >
-            <option value={0}>Select year</option>
-            {currentVenue?.available_years.map(y => (
-              <option key={y} value={y}>{y}</option>
-            ))}
-          </select>
+          {showCustomInput ? (
+            <div className="flex gap-1">
+              <input
+                ref={customInputRef}
+                type="number"
+                min={minYear}
+                max={2100}
+                placeholder={`${minYear}+`}
+                value={customYear}
+                onChange={e => setCustomYear(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleCustomYearConfirm()}
+                className="flex-1 border border-indigo-400 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+              />
+              <button
+                onClick={handleCustomYearConfirm}
+                disabled={!customYear}
+                className="px-3 py-2 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700 disabled:opacity-40"
+              >
+                OK
+              </button>
+              <button
+                onClick={() => { setShowCustomInput(false); setCustomYear('') }}
+                className="px-2 py-2 text-gray-500 hover:text-gray-700 text-sm"
+              >
+                ✕
+              </button>
+            </div>
+          ) : (
+            <select
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+              value={selectedYear || ''}
+              onChange={e => handleYearSelect(e.target.value)}
+              disabled={!selectedVenue}
+            >
+              <option value="">Select year</option>
+              {knownYears.map((y: number) => (
+                <option key={y} value={y}>{y}</option>
+              ))}
+              <option value="__custom__">＋ Add year ({minYear}+)…</option>
+            </select>
+          )}
+          {selectedYear > 0 && !showCustomInput && (
+            <p className="text-xs text-indigo-500 mt-1">{selectedYear} selected</p>
+          )}
         </div>
       </div>
 
@@ -194,17 +255,17 @@ export function DataManager({ venues, onVenuesChange }: Props) {
               </thead>
               <tbody>
                 {venues.flatMap(v =>
-                  v.available_years.map(y => (
-                    <tr key={`${v.name}-${y}`} className="border-b border-gray-100 hover:bg-gray-50">
+                  Object.keys(v.status).map((ys: string) => (
+                    <tr key={`${v.name}-${ys}`} className="border-b border-gray-100 hover:bg-gray-50">
                       <td className="py-1.5 pr-4 font-medium">{v.display_name}</td>
-                      <td className="py-1.5 pr-4">{y}</td>
+                      <td className="py-1.5 pr-4">{ys}</td>
                       <td className="py-1.5 pr-4">
-                        {v.status?.[String(y)]?.fetched
+                        {v.status[ys]?.fetched
                           ? <CheckCircle className="w-3.5 h-3.5 text-green-500" />
                           : <span className="text-gray-300">—</span>}
                       </td>
                       <td className="py-1.5">
-                        {v.status?.[String(y)]?.indexed
+                        {v.status[ys]?.indexed
                           ? <CheckCircle className="w-3.5 h-3.5 text-green-500" />
                           : <span className="text-gray-300">—</span>}
                       </td>
