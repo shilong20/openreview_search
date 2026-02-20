@@ -145,8 +145,8 @@ def evaluate_relevance(
     Returns:
         Papers sorted by relevance_score descending
     """
-    candidates = papers[:top_k]
-    logger.info(f"LLM evaluating {len(candidates)} papers for relevance...")
+    candidates = papers
+    logger.info(f"LLM evaluating {len(candidates)} papers for relevance (top_k hint: {top_k})...")
 
     evaluated = asyncio.run(
         _evaluate_papers_parallel(

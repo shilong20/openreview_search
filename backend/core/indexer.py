@@ -53,9 +53,13 @@ def build_index(
     # Filter to accepted papers only (exclude clear rejects)
     accepted = [
         p for p in papers
-        if "reject" not in p.get("decision", "").lower()
-        and p.get("decision", "N/A") != "N/A"
-        or p.get("abstract", "")  # include if has abstract even without decision
+        if (
+            "reject" not in p.get("decision", "").lower()
+            and p.get("decision", "N/A") != "N/A"
+        ) or (
+            p.get("decision", "N/A") == "N/A"
+            and bool(p.get("abstract", ""))
+        )
     ]
 
     if not accepted:

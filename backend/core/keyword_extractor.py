@@ -38,14 +38,14 @@ def extract_keywords(description: str, model: str | None = None) -> dict[str, li
     Returns:
         dict with 'keywords' and 'expanded' lists
     """
-    llm = create_llm(model=model, temperature=0.0, max_tokens=500)
-
-    messages = [
-        SystemMessage(content=SYSTEM_PROMPT),
-        HumanMessage(content=USER_PROMPT.format(description=description)),
-    ]
-
     try:
+        llm = create_llm(model=model, temperature=0.0, max_tokens=500)
+
+        messages = [
+            SystemMessage(content=SYSTEM_PROMPT),
+            HumanMessage(content=USER_PROMPT.format(description=description)),
+        ]
+
         response = llm.invoke(messages)
         text = response.content.strip()
 

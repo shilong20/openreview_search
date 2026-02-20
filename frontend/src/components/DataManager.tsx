@@ -49,14 +49,16 @@ export function DataManager({ venues, onVenuesChange }: Props) {
 
   const handleFetch = async () => {
     if (!selectedVenue || !selectedYear) return
-    await api.fetchPapers(selectedVenue, selectedYear)
+    const force = !!yearStatus?.fetched
+    await api.fetchPapers(selectedVenue, selectedYear, force)
     setPolling(true)
     pollStatus()
   }
 
   const handleIndex = async () => {
     if (!selectedVenue || !selectedYear) return
-    await api.buildIndex(selectedVenue, selectedYear)
+    const force = !!yearStatus?.indexed
+    await api.buildIndex(selectedVenue, selectedYear, force)
     setPolling(true)
     pollStatus()
   }
