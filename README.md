@@ -75,6 +75,8 @@ What happens:
 - Save data to `storage/papers_data/{venue}_{year}/all_papers.json`.
 - Save metadata to `storage/papers_data/{venue}_{year}/metadata.json`.
 
+![Data Manager UI](./data%20manager.png)
+
 ### Stage 2: Build vector index
 
 `Data Manager` -> click `Build Index`.
@@ -96,6 +98,8 @@ Pipeline:
 3. Optional LLM relevance scoring (`use_llm_eval`).
 4. Optional bilingual translation for final `top_k` (`use_bilingual_translation`).
 5. Return ranked results to UI.
+
+![Search UI](./search.png)
 
 ## Advanced Search Options (UI)
 

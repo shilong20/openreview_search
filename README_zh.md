@@ -75,6 +75,8 @@ npm run dev
 - 存储到 `storage/papers_data/{venue}_{year}/all_papers.json`。
 - 元信息写入 `storage/papers_data/{venue}_{year}/metadata.json`。
 
+![Data Manager 界面](./data%20manager.png)
+
 ### 阶段二：构建向量索引
 
 `Data Manager` -> 点击 `Build Index`。
@@ -96,6 +98,8 @@ npm run dev
 3. 可选 LLM 相关性评分（`use_llm_eval`）。
 4. 可选双语翻译（最终 `top_k`，`use_bilingual_translation`）。
 5. 返回排序结果并展示。
+
+![Search 界面](./search.png)
 
 ## 高级搜索选项（前端）
 
