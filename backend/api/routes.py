@@ -14,6 +14,7 @@ from ..core.indexer import build_index, is_indexed, list_indexed_years
 from ..core.keyword_extractor import extract_keywords
 from ..core.search_engine import hybrid_search
 from ..core.evaluator import evaluate_relevance
+from ..core.translator import translate_papers_bilingual
 
 router = APIRouter()
 
@@ -39,9 +40,11 @@ class SearchRequest(BaseModel):
     venue: str
     year: int
     research_description: str = Field(..., min_length=3)
-    top_k: int = Field(default=50, ge=1, le=200)
+    top_k: int = Field(default=10, ge=1, le=200)
     max_concurrent: int = Field(default=10, ge=1, le=20)
     use_llm_eval: bool = True
+    use_bilingual_translation: bool = True
+    use_chinese_relevance_reason: bool = True
     vector_weight: float = Field(default=1.0, ge=0.0)
     keyword_weight: float = Field(default=1.0, ge=0.0)
 
@@ -49,8 +52,10 @@ class SearchRequest(BaseModel):
 class PaperResult(BaseModel):
     id: str
     title: str
+    title_zh: str = ""
     authors: list[str]
     abstract: str
+    abstract_zh: str = ""
     keywords: list[str]
     venue: str
     year: int
@@ -175,7 +180,8 @@ def search_papers(req: SearchRequest) -> dict[str, Any]:
     1. Extract keywords from description (LLM)
     2. Hybrid search (vector + keyword + RRF)
     3. LLM relevance evaluation (optional)
-    4. Return ranked results
+    4. Translate final papers to bilingual fields (optional)
+    5. Return ranked results
     """
     if not is_cached(req.venue, req.year):
         raise HTTPException(
@@ -215,6 +221,7 @@ def search_papers(req: SearchRequest) -> dict[str, Any]:
             research_description=req.research_description,
             top_k=req.top_k,
             max_concurrent=req.max_concurrent,
+            use_chinese_reason=req.use_chinese_relevance_reason,
         )
     else:
         # No LLM eval: use rrf_score as relevance proxy
@@ -223,14 +230,27 @@ def search_papers(req: SearchRequest) -> dict[str, Any]:
             p["relevance_score"] = p.get("rrf_score", 0.0)
             p["relevance_reason"] = ""
 
+    # Step 4: Bilingual translation for final top_k papers (optional)
+    if req.use_bilingual_translation:
+        papers = translate_papers_bilingual(
+            papers=papers,
+            max_concurrent=req.max_concurrent,
+        )
+    else:
+        for p in papers:
+            p["title_zh"] = p.get("title", "")
+            p["abstract_zh"] = p.get("abstract", "")
+
     # Serialize results
     result_papers = []
     for p in papers:
         result_papers.append({
             "id": p.get("id", ""),
             "title": p.get("title", ""),
+            "title_zh": p.get("title_zh", ""),
             "authors": p.get("authors", []),
             "abstract": p.get("abstract", ""),
+            "abstract_zh": p.get("abstract_zh", ""),
             "keywords": p.get("keywords", []),
             "venue": p.get("venue", req.venue),
             "year": p.get("year", req.year),

@@ -24,6 +24,11 @@ function ScoreBar({ score }: { score: number }) {
 
 function PaperCard({ paper, rank }: { paper: Paper; rank: number }) {
   const [expanded, setExpanded] = useState(false)
+  const displayTitleEn = paper.title?.trim() || paper.title_zh?.trim() || ''
+  const displayTitleZh = paper.title_zh?.trim() || ''
+  const displayAbstractZh = paper.abstract_zh?.trim() || paper.abstract
+  const hasBilingualTitle = Boolean(displayTitleZh && displayTitleEn && displayTitleZh !== displayTitleEn)
+  const hasBilingualAbstract = Boolean(displayAbstractZh && paper.abstract && displayAbstractZh !== paper.abstract)
 
   const decisionColor = () => {
     const d = paper.decision.toLowerCase()
@@ -43,9 +48,15 @@ function PaperCard({ paper, rank }: { paper: Paper; rank: number }) {
 
         <div className="flex-1 min-w-0">
           {/* Title */}
-          <h3 className="text-sm font-semibold text-gray-900 leading-snug mb-2">
-            {paper.title}
+          <h3 className="text-sm font-semibold text-gray-900 leading-snug">
+            {displayTitleEn}
           </h3>
+          {hasBilingualTitle && (
+            <p className="text-xs text-gray-500 leading-snug mt-1 mb-2">
+              {displayTitleZh}
+            </p>
+          )}
+          {!hasBilingualTitle && <div className="mb-2" />}
 
           {/* Meta row */}
           <div className="flex flex-wrap items-center gap-2 mb-3">
@@ -90,9 +101,22 @@ function PaperCard({ paper, rank }: { paper: Paper; rank: number }) {
               {expanded ? 'Hide' : 'Show'} abstract
             </button>
             {expanded && (
-              <p className="text-xs text-gray-600 leading-relaxed bg-gray-50 rounded-lg p-3">
-                {paper.abstract || 'No abstract available.'}
-              </p>
+              <div className="text-xs text-gray-600 leading-relaxed bg-gray-50 rounded-lg p-3 space-y-2">
+                {displayAbstractZh ? (
+                  <div>
+                    <div className="text-[11px] text-indigo-600 mb-1">中文摘要</div>
+                    <p>{displayAbstractZh}</p>
+                  </div>
+                ) : (
+                  <p>No abstract available.</p>
+                )}
+                {hasBilingualAbstract && (
+                  <div>
+                    <div className="text-[11px] text-gray-500 mb-1">Original Abstract</div>
+                    <p>{paper.abstract}</p>
+                  </div>
+                )}
+              </div>
             )}
           </div>
 

@@ -84,30 +84,50 @@ def create_embeddings(model: str | None = None) -> OpenAIEmbeddings:
     """Create an embeddings client.
 
     Embedding provider is configured independently from LLM provider.
-    Priority: SiliconFlow > LLM_PROVIDER-specific config.
+    Priority:
+      1) Generic embedding config (EMBEDDING_API_KEY / EMBEDDING_BASE_URL / EMBEDDING_MODEL)
+      2) Legacy compatibility config (SILICONFLOW_*)
+      3) LLM_PROVIDER-specific fallback credentials
 
-    SiliconFlow (recommended for embeddings):
-      - SILICONFLOW_API_KEY
-      - SILICONFLOW_BASE_URL  (default: https://api.siliconflow.cn/v1)
-      - SILICONFLOW_EMBEDDING_MODEL  (default: BAAI/bge-m3)
-
-    Fallback follows LLM_PROVIDER:
+    Fallback follows LLM_PROVIDER when embedding credentials are not explicitly set:
       - openai: OPENAI_API_KEY / OPENAI_BASE_URL / EMBEDDING_MODEL
       - gemini:  GEMINI_API_KEY / GEMINI_BASE_URL / EMBEDDING_MODEL
     """
-    # SiliconFlow takes priority if API key is set
-    sf_api_key = os.getenv("SILICONFLOW_API_KEY")
-    if sf_api_key:
+    # 1) Generic embedding config (provider-agnostic)
+    generic_api_key = os.getenv("EMBEDDING_API_KEY")
+    generic_base_url = os.getenv("EMBEDDING_BASE_URL")
+    generic_model = os.getenv("EMBEDDING_MODEL")
+
+    if generic_api_key or generic_base_url or generic_model:
+        resolved_model = model or generic_model or "text-embedding-3-small"
+
+        # If api key is omitted in generic config, fall back to provider credentials.
+        api_key = generic_api_key
+        if not api_key:
+            provider = get_llm_provider()
+            api_key = os.getenv("OPENAI_API_KEY") if provider == "openai" else os.getenv("GEMINI_API_KEY")
+
+        kwargs: dict[str, Any] = {
+            "model": resolved_model,
+            "api_key": api_key,
+        }
+        if generic_base_url:
+            kwargs["base_url"] = generic_base_url
+        return OpenAIEmbeddings(**kwargs)
+
+    # 2) Legacy compatibility config
+    legacy_api_key = os.getenv("SILICONFLOW_API_KEY")
+    if legacy_api_key:
         base_url = os.getenv("SILICONFLOW_BASE_URL", "https://api.siliconflow.cn/v1")
         default_model = os.getenv("SILICONFLOW_EMBEDDING_MODEL", "BAAI/bge-m3")
         resolved_model = model or default_model
         return OpenAIEmbeddings(
             model=resolved_model,
-            api_key=sf_api_key,
+            api_key=legacy_api_key,
             base_url=base_url,
         )
 
-    # Fallback: use LLM provider's credentials
+    # 3) Fallback: use LLM provider's credentials
     provider = get_llm_provider()
     if provider == "openai":
         api_key = os.getenv("OPENAI_API_KEY")

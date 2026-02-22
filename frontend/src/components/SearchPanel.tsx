@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { Search, Settings, Loader2 } from 'lucide-react'
 import type { Venue, SearchResult } from '../types'
 import { api } from '../api'
@@ -8,12 +8,33 @@ interface Props {
   onResults: (result: SearchResult, venue: string, year: number, description: string) => void
 }
 
+const BILINGUAL_TRANSLATION_KEY = 'paper_search_use_bilingual_translation_v1'
+const CHINESE_REASON_KEY = 'paper_search_use_chinese_relevance_reason_v1'
+
 export function SearchPanel({ venues, onResults }: Props) {
   const [venue, setVenue] = useState('')
   const [year, setYear] = useState<number>(0)
   const [description, setDescription] = useState('')
-  const [topK, setTopK] = useState(30)
+  const [topK, setTopK] = useState(10)
   const [useLLM, setUseLLM] = useState(true)
+  const [useBilingualTranslation, setUseBilingualTranslation] = useState<boolean>(() => {
+    try {
+      const raw = localStorage.getItem(BILINGUAL_TRANSLATION_KEY)
+      if (!raw) return true
+      return raw === 'true'
+    } catch {
+      return true
+    }
+  })
+  const [useChineseReason, setUseChineseReason] = useState<boolean>(() => {
+    try {
+      const raw = localStorage.getItem(CHINESE_REASON_KEY)
+      if (!raw) return true
+      return raw === 'true'
+    } catch {
+      return true
+    }
+  })
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -26,10 +47,46 @@ export function SearchPanel({ venues, onResults }: Props) {
   const yearStatus = venue && year ? currentVenue?.status?.[String(year)] : null
   const canSearch = venue && year > 0 && description.trim().length >= 3 && yearStatus?.fetched
 
-  const knownYears = currentVenue
-    ? Object.keys(currentVenue.status).map(Number).sort((a, b) => b - a)
-    : []
   const minYear = currentVenue?.min_year ?? 2024
+  const thisYear = new Date().getFullYear()
+  const defaultYears = minYear <= thisYear
+    ? Array.from({ length: thisYear - minYear + 1 }, (_, i) => thisYear - i)
+    : [minYear]
+  const knownYears = currentVenue
+    ? Object.keys(currentVenue.status).map(Number)
+    : []
+  const selectableYears = Array.from(new Set([...knownYears, ...defaultYears]))
+    .sort((a, b) => b - a)
+  const yearSelectValue = year || selectableYears[0] || ''
+
+  useEffect(() => {
+    if (!venue && venues.length > 0) {
+      setVenue(venues[0].name)
+    }
+  }, [venue, venues])
+
+  useEffect(() => {
+    if (!venue || year > 0 || showCustomInput || selectableYears.length === 0) {
+      return
+    }
+    setYear(selectableYears[0])
+  }, [venue, year, showCustomInput, selectableYears])
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(BILINGUAL_TRANSLATION_KEY, String(useBilingualTranslation))
+    } catch {
+      // ignore storage errors
+    }
+  }, [useBilingualTranslation])
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(CHINESE_REASON_KEY, String(useChineseReason))
+    } catch {
+      // ignore storage errors
+    }
+  }, [useChineseReason])
 
   const handleYearSelect = (val: string) => {
     if (val === '__custom__') {
@@ -61,6 +118,8 @@ export function SearchPanel({ venues, onResults }: Props) {
         research_description: description.trim(),
         top_k: topK,
         use_llm_eval: useLLM,
+        use_bilingual_translation: useBilingualTranslation,
+        use_chinese_relevance_reason: useChineseReason,
       })
       onResults(result, venue, year, description.trim())
     } catch (e: unknown) {
@@ -84,7 +143,7 @@ export function SearchPanel({ venues, onResults }: Props) {
           <select
             className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
             value={venue}
-            onChange={e => { setVenue(e.target.value); setYear(0) }}
+            onChange={e => { setVenue(e.target.value); setYear(0); setShowCustomInput(false); setCustomYear('') }}
           >
             <option value="">Select conference</option>
             {venues.map(v => (
@@ -124,12 +183,11 @@ export function SearchPanel({ venues, onResults }: Props) {
           ) : (
             <select
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
-              value={year || ''}
+              value={yearSelectValue}
               onChange={e => handleYearSelect(e.target.value)}
-              disabled={!venue}
+              disabled={!venue || selectableYears.length === 0}
             >
-              <option value="">Select year</option>
-              {knownYears.map((y: number) => (
+              {selectableYears.map((y: number) => (
                 <option key={y} value={y}>{y}</option>
               ))}
               <option value="__custom__">＋ Add year ({minYear}+)…</option>
@@ -185,7 +243,7 @@ export function SearchPanel({ venues, onResults }: Props) {
         </button>
 
         {showAdvanced && (
-          <div className="mt-3 grid grid-cols-2 gap-4 p-4 bg-gray-50 rounded-lg">
+          <div className="mt-3 grid grid-cols-1 gap-4 p-4 bg-gray-50 rounded-lg">
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">
                 Top K results: {topK}
@@ -213,6 +271,33 @@ export function SearchPanel({ venues, onResults }: Props) {
                 <span className="block text-gray-400">More accurate but slower</span>
               </label>
             </div>
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="useChineseReason"
+                checked={useChineseReason}
+                onChange={e => setUseChineseReason(e.target.checked)}
+                className="rounded"
+                disabled={!useLLM}
+              />
+              <label htmlFor="useChineseReason" className={`text-xs ${useLLM ? 'text-gray-600' : 'text-gray-400'}`}>
+                Relevance reason in Chinese
+                <span className="block text-gray-400">Control LLM reason language in prompt</span>
+              </label>
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="useBilingualTranslation"
+                checked={useBilingualTranslation}
+                onChange={e => setUseBilingualTranslation(e.target.checked)}
+                className="rounded"
+              />
+              <label htmlFor="useBilingualTranslation" className="text-xs text-gray-600">
+                Bilingual title/abstract (ZH + EN)
+                <span className="block text-gray-400">Translate top-k results to Chinese</span>
+              </label>
+            </div>
           </div>
         )}
       </div>
@@ -233,7 +318,7 @@ export function SearchPanel({ venues, onResults }: Props) {
         {loading ? (
           <>
             <Loader2 className="w-4 h-4 animate-spin" />
-            Searching{useLLM ? ' & Evaluating' : ''}...
+            {`Searching${useLLM ? ' & Evaluating' : ''}${useBilingualTranslation ? ' & Translating' : ''}...`}
           </>
         ) : (
           <>

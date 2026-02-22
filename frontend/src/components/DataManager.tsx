@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { Download, Database, CheckCircle, AlertCircle, Loader2, RefreshCw, Plus } from 'lucide-react'
+import { Download, Database, CheckCircle, AlertCircle, Loader2, RefreshCw } from 'lucide-react'
 import { api } from '../api'
 import type { Venue, JobStatus } from '../types'
 
@@ -23,11 +23,30 @@ export function DataManager({ venues, onVenuesChange }: Props) {
     ? currentVenue?.status?.[String(selectedYear)]
     : null
 
-  const knownYears = currentVenue
-    ? Object.keys(currentVenue.status).map(Number).sort((a, b) => b - a)
-    : []
-
   const minYear = currentVenue?.min_year ?? 2024
+  const thisYear = new Date().getFullYear()
+  const defaultYears = minYear <= thisYear
+    ? Array.from({ length: thisYear - minYear + 1 }, (_, i) => thisYear - i)
+    : [minYear]
+  const knownYears = currentVenue
+    ? Object.keys(currentVenue.status).map(Number)
+    : []
+  const selectableYears = Array.from(new Set([...knownYears, ...defaultYears]))
+    .sort((a, b) => b - a)
+  const yearSelectValue = selectedYear || selectableYears[0] || ''
+
+  useEffect(() => {
+    if (!selectedVenue && venues.length > 0) {
+      setSelectedVenue(venues[0].name)
+    }
+  }, [selectedVenue, venues])
+
+  useEffect(() => {
+    if (!selectedVenue || selectedYear > 0 || showCustomInput || selectableYears.length === 0) {
+      return
+    }
+    setSelectedYear(selectableYears[0])
+  }, [selectedVenue, selectedYear, showCustomInput, selectableYears])
 
   const handleYearSelect = (val: string) => {
     if (val === '__custom__') {
@@ -58,11 +77,11 @@ export function DataManager({ venues, onVenuesChange }: Props) {
     setIndexStatus(is)
 
     const stillRunning = fs.status === 'running' || is.status === 'running'
-    if (!stillRunning) {
+    if (!stillRunning && polling) {
       setPolling(false)
       onVenuesChange()
     }
-  }, [selectedVenue, selectedYear, onVenuesChange])
+  }, [selectedVenue, selectedYear, polling, onVenuesChange])
 
   useEffect(() => {
     if (!selectedVenue || !selectedYear) return
@@ -136,7 +155,7 @@ export function DataManager({ venues, onVenuesChange }: Props) {
           <select
             className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
             value={selectedVenue}
-            onChange={e => { setSelectedVenue(e.target.value); setSelectedYear(0) }}
+            onChange={e => { setSelectedVenue(e.target.value); setSelectedYear(0); setShowCustomInput(false); setCustomYear('') }}
           >
             <option value="">Select conference</option>
             {venues.map(v => (
@@ -176,12 +195,11 @@ export function DataManager({ venues, onVenuesChange }: Props) {
           ) : (
             <select
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
-              value={selectedYear || ''}
+              value={yearSelectValue}
               onChange={e => handleYearSelect(e.target.value)}
-              disabled={!selectedVenue}
+              disabled={!selectedVenue || selectableYears.length === 0}
             >
-              <option value="">Select year</option>
-              {knownYears.map((y: number) => (
+              {selectableYears.map((y: number) => (
                 <option key={y} value={y}>{y}</option>
               ))}
               <option value="__custom__">＋ Add year ({minYear}+)…</option>

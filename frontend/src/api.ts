@@ -42,6 +42,8 @@ export const api = {
     top_k?: number
     max_concurrent?: number
     use_llm_eval?: boolean
+    use_bilingual_translation?: boolean
+    use_chinese_relevance_reason?: boolean
     vector_weight?: number
     keyword_weight?: number
   }) =>

@@ -1,152 +1,183 @@
-# AI 论文搜索系统
+# AI Paper Search System
 
-基于研究相关性搜索和排序 AI 顶会论文。
+[中文文档](./README_zh.md)
 
-## 支持的会议（2024 年起）
+Search and rank top AI conference papers by research relevance.
 
-| 会议 | OpenReview Venue ID |
-|------|---------------------|
-| ICLR | ICLR.cc |
-| NeurIPS | NeurIPS.cc |
-| ICML | ICML.cc |
-| CVPR | thecvf.com/CVPR |
-| ACL | aclweb.org/ACL |
+## Supported Venues (2024+)
 
-## 快速开始
+| Venue | OpenReview Venue ID |
+|---|---|
+| ICLR | `ICLR.cc/{year}/Conference` |
+| NeurIPS | `NeurIPS.cc/{year}/Conference` |
+| ICML | `ICML.cc/{year}/Conference` |
+| CVPR | `thecvf.com/CVPR/{year}/Conference` |
+| ACL | `aclweb.org/ACL/{year}/Conference` |
 
-### 1. 配置 API Key
+## Highlights
+
+- Fetches paper submissions from OpenReview and caches them locally.
+- Builds local vector indexes with ChromaDB for semantic retrieval.
+- Hybrid retrieval pipeline: vector search + keyword matching + RRF fusion.
+- Optional LLM relevance reranking with controllable reason language (Chinese/English).
+- Optional bilingual output for title and abstract (EN + ZH).
+- Search history saved in browser `localStorage`.
+
+## Quick Start
+
+### 1. Configure environment variables
 
 ```bash
 cp .env.example .env
-# 编辑 .env，填入你的 API Key
+# Edit .env and fill your API keys/config
 ```
 
-### 2. 启动后端
+### 2. One-command start (recommended)
+
+```bash
+make dev
+```
+
+Open: `http://localhost:5173`
+
+If `make` is unavailable:
+
+```bash
+./start_all.sh
+```
+
+### 3. Start services separately (optional)
+
+Backend:
 
 ```bash
 bash start_backend.sh
 ```
 
-### 3. 启动前端
+Frontend:
 
 ```bash
 cd frontend
 npm run dev
 ```
 
-打开 http://localhost:5173
+## Workflow
 
-## 使用流程
+The workflow has three stages. Stages 1 and 2 are usually one-time per venue/year.
 
-系统分三个阶段，**阶段一和二只需执行一次**，之后可反复搜索。
+### Stage 1: Fetch papers
 
-### 阶段一：抓取论文数据（一次性）
+`Data Manager` -> choose `Conference` + `Year` -> click `Fetch`.
 
-> Data Manager → 选择会议 + 年份 → **Fetch Papers**
+What happens:
 
-```
-OpenReview API
-  → 拉取指定会议的所有 submission
-  → 过滤出已接收论文（检查 decision 字段）
-  → 保存到 storage/papers_data/{venue}_{year}.json
-```
+- Pull submissions from OpenReview.
+- Save data to `storage/papers_data/{venue}_{year}/all_papers.json`.
+- Save metadata to `storage/papers_data/{venue}_{year}/metadata.json`.
 
-### 阶段二：构建向量索引（一次性）
+### Stage 2: Build vector index
 
-> Data Manager → **Build Vector Index**
+`Data Manager` -> click `Build Index`.
 
-```
-读取本地 JSON 数据
-  → 每篇论文拼接 title + abstract + keywords
-  → 批量调用 SiliconFlow Embedding API 向量化
-  → 向量持久化到 storage/vector_db/{venue}_{year}/（ChromaDB）
-```
+What happens:
 
-> ⚡ 索引构建完成后不再调用 Embedding API，每次搜索仅对 query 本身调用一次。
+- Read local cached paper JSON.
+- Build embeddings for each paper (`title + abstract + keywords`).
+- Persist ChromaDB index to `storage/vector_db/{venue}_{year}/`.
 
-### 阶段三：搜索与排序（每次搜索）
+### Stage 3: Search and rank
 
-> Search → 输入研究方向 → **Search**
+`Search` -> enter `Research Interests` -> click `Search`.
 
-```
-① 关键词提取（LLM）
-     用户描述 → 提取核心术语 + 同义词扩展
-     e.g. "LLM reasoning" → ["chain-of-thought", "CoT", "prompt engineering", ...]
+Pipeline:
 
-② 混合检索（Hybrid Search）
-     向量检索：query 向量化 → ChromaDB 近邻搜索
-     关键词检索：扩展词在论文文本中匹配
-     RRF 融合：Reciprocal Rank Fusion 合并两路排名
+1. Keyword extraction and expansion (LLM).
+2. Hybrid retrieval (vector + keyword + RRF).
+3. Optional LLM relevance scoring (`use_llm_eval`).
+4. Optional bilingual translation for final `top_k` (`use_bilingual_translation`).
+5. Return ranked results to UI.
 
-③ LLM 重排（可选，use_llm_eval=true）
-     并行调用 LLM 对候选论文打相关性分（0~1）
-     按分数重排后返回 top_k 结果
+## Advanced Search Options (UI)
 
-④ 前端展示
-     相关性进度条 + 评分理由 + 摘要折叠 + OpenReview/PDF 链接
-```
+In `Search` -> `Show advanced options`:
 
-## 配置说明（.env）
+- `Top K results`:
+  - UI default: `10`
+  - UI range: `10..100` (step `10`)
+  - API default: `10`
+- `LLM relevance scoring` (`use_llm_eval`)
+- `Relevance reason in Chinese` (`use_chinese_relevance_reason`)
+  - Controls the evaluator prompt language.
+  - Disabled when LLM relevance scoring is off.
+- `Bilingual title/abstract (ZH + EN)` (`use_bilingual_translation`)
 
-```
-# LLM 提供商（用于关键词提取和相关性评分）：'openai' 或 'gemini'
-LLM_PROVIDER=openai
+Persistent UI preferences in browser `localStorage`:
 
-# OpenAI 配置（支持自定义 base_url 接入第三方兼容接口）
-OPENAI_API_KEY=sk-...
-OPENAI_BASE_URL=https://api.openai.com/v1  # 可选，默认官方地址
-LLM_MODEL=gpt-4o-mini
+- `paper_search_use_bilingual_translation_v1`
+- `paper_search_use_chinese_relevance_reason_v1`
 
-# Gemini 配置（LLM_PROVIDER=gemini 时使用）
+## Search History
+
+- Automatically saves query + result snapshot in browser `localStorage`.
+- Storage key: `paper_search_history_v1`.
+- Keeps latest `20` items.
+- Supports open/delete/clear from the `Search History` panel.
+
+## Configuration (`.env`)
+
+```bash
+# LLM provider for keyword extraction / relevance evaluation
+LLM_PROVIDER=openai  # or gemini
+
+# OpenAI-compatible LLM config
+OPENAI_API_KEY=...
+OPENAI_BASE_URL=...   # optional
+LLM_MODEL=...
+
+# Gemini (when LLM_PROVIDER=gemini)
 # GEMINI_API_KEY=...
+# GEMINI_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai/
 # LLM_MODEL=gemini-2.0-flash
 
-# 硅基流动 Embedding 配置（独立于 LLM 提供商，优先级最高）
-# 申请地址：https://cloud.siliconflow.cn/account/ak
-SILICONFLOW_API_KEY=sk-...
-SILICONFLOW_BASE_URL=https://api.siliconflow.cn/v1
-SILICONFLOW_EMBEDDING_MODEL=BAAI/bge-m3  # 可选：Qwen/Qwen3-Embedding-8B（更强）
-
-# 未配置硅基流动时的降级 Embedding 模型
-EMBEDDING_MODEL=text-embedding-3-small
+# Embeddings
+EMBEDDING_API_KEY=...
+EMBEDDING_BASE_URL=https://your-embedding-endpoint/v1
+EMBEDDING_MODEL=BAAI/bge-m3
 ```
 
-**推荐 Embedding 模型：**
+## Project Structure
 
-| 模型 | 维度 | 最大 tokens | 适用场景 |
-|------|------|------------|----------|
-| `BAAI/bge-m3` | 1024 | 8192 | 多语言，默认推荐 |
-| `Qwen/Qwen3-Embedding-8B` | 4096 | 32768 | 最强效果，长文本 |
-| `BAAI/bge-large-en-v1.5` | 1024 | 512 | 纯英文，速度快 |
-
-## 项目结构
-
-```
+```text
 openreview_search/
 ├── backend/
-│   ├── core/
-│   │   ├── venues.py             # 会议 venue ID 配置
-│   │   ├── llm_client.py         # OpenAI/Gemini 统一适配层
-│   │   ├── fetcher.py            # OpenReview 论文抓取
-│   │   ├── indexer.py            # ChromaDB 向量索引构建
-│   │   ├── search_engine.py      # 混合检索（向量 + 关键词 + RRF）
-│   │   ├── keyword_extractor.py  # LLM 关键词提取与扩展
-│   │   └── evaluator.py          # LLM 相关性评分（并行）
 │   ├── api/
-│   │   └── routes.py             # FastAPI 路由
-│   └── main.py                   # FastAPI 应用入口
+│   │   └── routes.py
+│   ├── core/
+│   │   ├── venues.py
+│   │   ├── fetcher.py
+│   │   ├── indexer.py
+│   │   ├── search_engine.py
+│   │   ├── keyword_extractor.py
+│   │   ├── evaluator.py
+│   │   ├── translator.py
+│   │   └── llm_client.py
+│   └── main.py
 ├── frontend/
 │   └── src/
-│       ├── App.tsx
 │       ├── components/
-│       │   ├── DataManager.tsx   # 数据抓取与索引管理
-│       │   ├── SearchPanel.tsx   # 搜索输入面板
-│       │   └── ResultsList.tsx   # 结果展示
-│       ├── api.ts                # API 客户端
-│       └── types.ts              # TypeScript 类型定义
+│       │   ├── DataManager.tsx
+│       │   ├── SearchPanel.tsx
+│       │   ├── SearchHistory.tsx
+│       │   └── ResultsList.tsx
+│       ├── api.ts
+│       ├── types.ts
+│       └── App.tsx
 ├── storage/
-│   ├── papers_data/              # 抓取的论文 JSON 文件
-│   └── vector_db/                # ChromaDB 向量索引
+│   ├── papers_data/
+│   └── vector_db/
+├── start_backend.sh
+├── start_all.sh
+├── Makefile
 ├── requirements.txt
 └── .env.example
 ```

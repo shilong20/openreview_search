@@ -10,12 +10,12 @@ from loguru import logger
 
 from .llm_client import create_llm, extract_text
 
-SYSTEM_PROMPT = """You are an expert academic paper evaluator. Your task is to assess how relevant a research paper is to a user's research interests.
+SYSTEM_PROMPT_ZH = """You are an expert academic paper evaluator. Your task is to assess how relevant a research paper is to a user's research interests.
 
 Evaluate the paper and return a JSON object with exactly this structure:
 {
   "relevance_score": <float between 0.0 and 1.0>,
-  "relevance_reason": "<one sentence explanation>"
+  "relevance_reason": "<one sentence explanation in Simplified Chinese>"
 }
 
 Scoring guide:
@@ -25,7 +25,30 @@ Scoring guide:
 - 0.3-0.5: Tangentially related
 - 0.0-0.3: Not relevant
 
-Return ONLY the JSON object, no other text."""
+Rules:
+- The `relevance_reason` MUST be in Simplified Chinese.
+- Keep `relevance_reason` concise (one sentence).
+- Return ONLY the JSON object, no other text."""
+
+SYSTEM_PROMPT_EN = """You are an expert academic paper evaluator. Your task is to assess how relevant a research paper is to a user's research interests.
+
+Evaluate the paper and return a JSON object with exactly this structure:
+{
+  "relevance_score": <float between 0.0 and 1.0>,
+  "relevance_reason": "<one sentence explanation in English>"
+}
+
+Scoring guide:
+- 0.9-1.0: Directly addresses the research topic, highly relevant
+- 0.7-0.9: Closely related, significant overlap
+- 0.5-0.7: Moderately related, some overlap
+- 0.3-0.5: Tangentially related
+- 0.0-0.3: Not relevant
+
+Rules:
+- The `relevance_reason` MUST be in English.
+- Keep `relevance_reason` concise (one sentence).
+- Return ONLY the JSON object, no other text."""
 
 USER_PROMPT_TEMPLATE = """Research interests: {research_description}
 
@@ -63,6 +86,7 @@ async def _evaluate_single(
     research_description: str,
     llm,
     semaphore: asyncio.Semaphore,
+    system_prompt: str,
 ) -> dict:
     """Evaluate a single paper's relevance."""
     async with semaphore:
@@ -71,7 +95,7 @@ async def _evaluate_single(
         keywords = ", ".join(paper.get("keywords", [])[:10])
 
         messages = [
-            SystemMessage(content=SYSTEM_PROMPT),
+            SystemMessage(content=system_prompt),
             HumanMessage(content=USER_PROMPT_TEMPLATE.format(
                 research_description=research_description,
                 title=title,
@@ -100,14 +124,16 @@ async def _evaluate_papers_parallel(
     papers: list[dict],
     research_description: str,
     max_concurrent: int = 10,
+    use_chinese_reason: bool = True,
     model: str | None = None,
 ) -> list[dict]:
     """Evaluate papers in parallel with rate limiting."""
     llm = create_llm(model=model, temperature=0.0, max_tokens=200)
     semaphore = asyncio.Semaphore(max_concurrent)
+    system_prompt = SYSTEM_PROMPT_ZH if use_chinese_reason else SYSTEM_PROMPT_EN
 
     tasks = [
-        _evaluate_single(paper, research_description, llm, semaphore)
+        _evaluate_single(paper, research_description, llm, semaphore, system_prompt)
         for paper in papers
     ]
     results = await asyncio.gather(*tasks, return_exceptions=True)
@@ -131,6 +157,7 @@ def evaluate_relevance(
     research_description: str,
     top_k: int = 100,
     max_concurrent: int = 10,
+    use_chinese_reason: bool = True,
     model: str | None = None,
 ) -> list[dict]:
     """Evaluate and rank papers by relevance to research description.
@@ -153,6 +180,7 @@ def evaluate_relevance(
             candidates,
             research_description,
             max_concurrent=max_concurrent,
+            use_chinese_reason=use_chinese_reason,
             model=model,
         )
     )

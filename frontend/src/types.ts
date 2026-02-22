@@ -13,8 +13,10 @@ export interface Venue {
 export interface Paper {
   id: string
   title: string
+  title_zh: string
   authors: string[]
   abstract: string
+  abstract_zh: string
   keywords: string[]
   venue: string
   year: number
@@ -32,6 +34,15 @@ export interface SearchResult {
   keywords: string[]
   expanded_keywords: string[]
   total_candidates: number
+}
+
+export interface SearchHistoryItem {
+  id: string
+  created_at: string
+  venue: string
+  year: number
+  description: string
+  result: SearchResult
 }
 
 export interface JobStatus {
