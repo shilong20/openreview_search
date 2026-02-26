@@ -20,8 +20,9 @@ def get_db_path(venue: str, year: int) -> Path:
 
 
 def is_indexed(venue: str, year: int) -> bool:
+    from .fetcher import is_cached
     db_path = get_db_path(venue, year)
-    return db_path.exists() and any(db_path.iterdir())
+    return db_path.exists() and any(db_path.iterdir()) and is_cached(venue, year)
 
 
 def list_indexed_years(venue: str) -> list[int]:
@@ -34,7 +35,7 @@ def list_indexed_years(venue: str) -> list[int]:
         if d.is_dir() and d.name.startswith(prefix):
             try:
                 year = int(d.name[len(prefix):])
-                if any(d.iterdir()):
+                if is_indexed(venue, year):
                     years.append(year)
             except ValueError:
                 pass

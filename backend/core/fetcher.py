@@ -10,6 +10,8 @@ import openreview
 from loguru import logger
 
 from .venues import get_venue_id, VENUES
+from .cvf_fetcher import fetch_cvf_papers
+from .semantic_scholar_fetcher import fetch_semantic_scholar_papers
 
 STORAGE_DIR = Path(__file__).parent.parent.parent / "storage" / "papers_data"
 
@@ -27,7 +29,14 @@ def get_metadata_file(venue: str, year: int) -> Path:
 
 
 def is_cached(venue: str, year: int) -> bool:
-    return get_papers_file(venue, year).exists()
+    f = get_papers_file(venue, year)
+    if not f.exists():
+        return False
+    try:
+        data = json.loads(f.read_text(encoding="utf-8"))
+        return isinstance(data, list) and len(data) > 0
+    except Exception:
+        return False
 
 
 def list_cached_years(venue: str) -> list[int]:
@@ -39,7 +48,7 @@ def list_cached_years(venue: str) -> list[int]:
         if d.is_dir() and d.name.startswith(f"{venue}_"):
             try:
                 year = int(d.name[len(venue) + 1:])
-                if (d / "all_papers.json").exists():
+                if is_cached(venue, year):
                     years.append(year)
             except ValueError:
                 pass
@@ -64,41 +73,15 @@ def _extract_value(field: Any) -> Any:
     return field
 
 
-def fetch_papers(
+def _fetch_from_openreview(
     venue: str,
     year: int,
-    force: bool = False,
     progress_callback=None,
-) -> dict:
-    """Fetch all papers from a conference and save to disk.
-
-    Args:
-        venue: Conference name (e.g., "NeurIPS", "CVPR")
-        year: Conference year
-        force: Re-download even if cache exists
-        progress_callback: Optional callable(current, total, message) for progress updates
-
-    Returns:
-        dict with keys: total, cached, venue, year
-    """
-    if venue not in VENUES:
-        raise ValueError(f"Unsupported venue: {venue}")
-
-    papers_file = get_papers_file(venue, year)
-    data_dir = get_papers_dir(venue, year)
-    data_dir.mkdir(parents=True, exist_ok=True)
-
-    if papers_file.exists() and not force:
-        meta = get_cache_metadata(venue, year)
-        total = meta["total_papers"] if meta else 0
-        logger.info(f"Cache hit: {venue} {year} ({total} papers)")
-        return {"total": total, "cached": True, "venue": venue, "year": year}
-
-    logger.info(f"Fetching papers from {venue} {year}...")
+) -> list[dict[str, Any]]:
+    """Fetch papers from OpenReview API."""
     client = _get_openreview_client()
     venue_id = get_venue_id(venue, year)
 
-    # Fetch all submissions
     max_retries = 5
     retry_delay = 10
     submissions = None
@@ -130,7 +113,6 @@ def fetch_papers(
         abstract = _extract_value(submission.content.get("abstract", ""))
         keywords = _extract_value(submission.content.get("keywords", []))
 
-        # Try to get decision from venue field
         venue_field = submission.content.get("venue", {})
         decision = _extract_value(venue_field) if venue_field else "N/A"
 
@@ -153,6 +135,52 @@ def fetch_papers(
             "decision_comment": "",
         }
         papers.append(paper_info)
+
+    return papers
+
+
+def fetch_papers(
+    venue: str,
+    year: int,
+    force: bool = False,
+    progress_callback=None,
+) -> dict:
+    """Fetch all papers from a conference and save to disk.
+
+    Args:
+        venue: Conference name (e.g., "NeurIPS", "CVPR")
+        year: Conference year
+        force: Re-download even if cache exists
+        progress_callback: Optional callable(current, total, message) for progress updates
+
+    Returns:
+        dict with keys: total, cached, venue, year
+    """
+    if venue not in VENUES:
+        raise ValueError(f"Unsupported venue: {venue}")
+
+    papers_file = get_papers_file(venue, year)
+    data_dir = get_papers_dir(venue, year)
+    data_dir.mkdir(parents=True, exist_ok=True)
+
+    if not force and is_cached(venue, year):
+        meta = get_cache_metadata(venue, year)
+        if meta and isinstance(meta.get("total_papers"), int):
+            total = meta["total_papers"]
+        else:
+            total = len(json.loads(papers_file.read_text(encoding="utf-8")))
+        logger.info(f"Cache hit: {venue} {year} ({total} papers)")
+        return {"total": total, "cached": True, "venue": venue, "year": year}
+
+    venue_config = VENUES[venue]
+    data_source = venue_config.data_source
+
+    if data_source == "cvf":
+        papers = fetch_cvf_papers(venue, year, progress_callback=progress_callback)
+    elif data_source == "semantic_scholar":
+        papers = fetch_semantic_scholar_papers(venue, year, progress_callback=progress_callback)
+    else:
+        papers = _fetch_from_openreview(venue, year, progress_callback=progress_callback)
 
     # Save papers
     papers_file.write_text(

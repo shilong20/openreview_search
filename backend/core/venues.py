@@ -10,9 +10,10 @@ class VenueConfig:
     display_name: str
     venue_id_template: str  # e.g. "NeurIPS.cc/{year}/Conference"
     min_year: int = 2024  # earliest supported year
+    data_source: str = "openreview"  # "openreview" or "cvf"
 
 
-# Supported conferences (all on OpenReview, 2024+)
+# Supported conferences
 VENUES: dict[str, VenueConfig] = {
     "NeurIPS": VenueConfig(
         name="NeurIPS",
@@ -33,11 +34,20 @@ VENUES: dict[str, VenueConfig] = {
         name="CVPR",
         display_name="CVPR",
         venue_id_template="thecvf.com/CVPR/{year}/Conference",
+        data_source="cvf",
     ),
-    "ACL": VenueConfig(
-        name="ACL",
-        display_name="ACL",
-        venue_id_template="aclweb.org/ACL/{year}/Conference",
+    "ICCV": VenueConfig(
+        name="ICCV",
+        display_name="ICCV",
+        venue_id_template="thecvf.com/ICCV/{year}/Conference",
+        min_year=2023,
+        data_source="cvf",
+    ),
+    "AAAI": VenueConfig(
+        name="AAAI",
+        display_name="AAAI",
+        venue_id_template="AAAI.org/{year}/Conference",
+        data_source="semantic_scholar",
     ),
 }
 

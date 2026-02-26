@@ -29,7 +29,8 @@ const FALLBACK_VENUES: Venue[] = [
   { name: 'ICLR', display_name: 'ICLR', min_year: 2024, status: {} },
   { name: 'ICML', display_name: 'ICML', min_year: 2024, status: {} },
   { name: 'CVPR', display_name: 'CVPR', min_year: 2024, status: {} },
-  { name: 'ACL', display_name: 'ACL', min_year: 2024, status: {} },
+  { name: 'ICCV', display_name: 'ICCV', min_year: 2023, status: {} },
+  { name: 'AAAI', display_name: 'AAAI', min_year: 2024, status: {} },
 ]
 
 export default function App() {

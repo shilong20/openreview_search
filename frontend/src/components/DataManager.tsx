@@ -122,11 +122,22 @@ export function DataManager({ venues, onVenuesChange }: Props) {
       )
     }
     if (status.status === 'done' || status.cached || status.indexed) {
+      const paperCount = label === 'fetch'
+        ? (status.metadata?.total_papers ?? status.result?.total ?? 0)
+        : null
+      if (paperCount === 0) {
+        return (
+          <span className="flex items-center gap-1 text-amber-600 text-sm">
+            <AlertCircle className="w-3 h-3" />
+            0 papers (no data available yet)
+          </span>
+        )
+      }
       return (
         <span className="flex items-center gap-1 text-green-600 text-sm">
           <CheckCircle className="w-3 h-3" />
-          {label === 'fetch' && status.metadata
-            ? `${status.metadata.total_papers.toLocaleString()} papers`
+          {label === 'fetch' && paperCount != null
+            ? `${paperCount.toLocaleString()} papers`
             : 'Ready'}
         </span>
       )
