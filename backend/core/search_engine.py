@@ -1,6 +1,5 @@
 """Hybrid search engine: vector search + keyword search + RRF fusion."""
 
-from pathlib import Path
 
 from loguru import logger
 
@@ -40,7 +39,11 @@ def vector_search(
         return []
 
     vectorstore = load_vectorstore(venue, year)
-    results = vectorstore.similarity_search_with_score(query_text, k=top_k)
+    try:
+        results = vectorstore.similarity_search_with_score(query_text, k=top_k)
+    except Exception as e:
+        logger.warning(f"Vector search failed (embedding API error?), falling back to keyword-only: {e}")
+        return []
 
     ranked = []
     for doc, distance in results:
@@ -66,11 +69,6 @@ def keyword_search(
     scored: list[tuple[str, float]] = []
 
     for paper in papers:
-        # Skip clear rejects
-        decision = paper.get("decision", "").lower()
-        if "reject" in decision:
-            continue
-
         paper_id = paper.get("id")
         if not paper_id:
             continue

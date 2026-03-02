@@ -68,20 +68,10 @@ def build_index(
     logger.info(f"Building vector index for {venue} {year}...")
     papers = load_papers(venue, year)
 
-    # Filter to accepted papers only (exclude clear rejects)
-    accepted = [
-        p for p in papers
-        if (
-            "reject" not in p.get("decision", "").lower()
-            and p.get("decision", "N/A") != "N/A"
-        ) or (
-            p.get("decision", "N/A") == "N/A"
-            and bool(p.get("abstract", ""))
-        )
-    ]
+    accepted = [p for p in papers if p.get("abstract")]
 
     if not accepted:
-        accepted = papers  # fallback: index all
+        accepted = papers
 
     logger.info(f"Indexing {len(accepted)} papers...")
 

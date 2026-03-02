@@ -78,7 +78,11 @@ def _fetch_from_openreview(
     year: int,
     progress_callback=None,
 ) -> list[dict[str, Any]]:
-    """Fetch papers from OpenReview API."""
+    """Fetch accepted papers from OpenReview API.
+
+    Uses content.venueid filter so only accepted papers are returned,
+    not the full pool of submissions.
+    """
     client = _get_openreview_client()
     venue_id = get_venue_id(venue, year)
 
@@ -89,9 +93,9 @@ def _fetch_from_openreview(
     for attempt in range(max_retries):
         try:
             submissions = client.get_all_notes(
-                invitation=f"{venue_id}/-/Submission",
+                content={"venueid": venue_id},
             )
-            logger.success(f"Fetched {len(submissions)} submissions")
+            logger.success(f"Fetched {len(submissions)} accepted papers for {venue} {year}")
             break
         except Exception as e:
             logger.warning(f"Attempt {attempt + 1}/{max_retries} failed: {e}")
