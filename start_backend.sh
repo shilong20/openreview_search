@@ -23,4 +23,6 @@ echo "Installing Python dependencies..."
 pip install -q -r requirements.txt
 
 echo "Starting FastAPI server on http://localhost:8000"
-uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload
+uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload \
+  --reload-include '*.py' \
+  --reload-include '.env'

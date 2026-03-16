@@ -120,6 +120,47 @@ npm run dev
 - `paper_search_use_bilingual_translation_v1`
 - `paper_search_use_chinese_relevance_reason_v1`
 
+## Skill 接口
+
+为了给 agent / skill 使用，后端新增了一个专用接口：
+
+```bash
+curl -X POST http://127.0.0.1:8000/api/skill/latest-topic-search \
+  -H 'Content-Type: application/json' \
+  -d '{"topic":"用于视频生成的 diffusion transformer"}'
+```
+
+当前版本的行为是固定的：
+
+- 会议范围：`NeurIPS`、`ICML`、`ICLR`、`CVPR`
+- 年份选择：每个会议都自动选择本地“已建索引”的最新年份
+- 每会返回数：`10`
+- relevance scoring：开启
+- 双语翻译：关闭
+- 失败语义：允许部分成功，并在 `failures` 中返回失败会议及原因
+
+返回结构包括：
+
+- `topic`、`keywords`、`expanded_keywords`
+- `venues[]`，字段含 `venue`、`selected_year`、`status`、`total_candidates`、`papers`
+- `papers[]`，字段含 `rank`、论文元信息、`pdf_url`、`forum_url`、`relevance_score`、`relevance_reason`
+- `failures[]` 和 `summary`
+
+## 仓库内本地 Skill
+
+仓库内提供了一个本地 skill：`skills/openreview-latest-topic-search/`。
+
+调用方式：
+
+```bash
+python3 skills/openreview-latest-topic-search/scripts/search_latest_topic.py \
+  --topic "用于视频生成的 diffusion transformer"
+```
+
+可选配置：
+
+- `OPENREVIEW_SEARCH_BASE_URL`：后端基础地址，默认 `http://127.0.0.1:8000`
+
 ## 搜索历史
 
 - 自动保存“检索词 + 结果快照”到浏览器 `localStorage`。
@@ -176,6 +217,11 @@ openreview_search/
 │       ├── api.ts
 │       ├── types.ts
 │       └── App.tsx
+├── skills/
+│   └── openreview-latest-topic-search/
+│       ├── SKILL.md
+│       └── scripts/
+│           └── search_latest_topic.py
 ├── storage/
 │   ├── papers_data/
 │   └── vector_db/

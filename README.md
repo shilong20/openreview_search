@@ -120,6 +120,47 @@ Persistent UI preferences in browser `localStorage`:
 - `paper_search_use_bilingual_translation_v1`
 - `paper_search_use_chinese_relevance_reason_v1`
 
+## Skill API
+
+For agent / skill usage, the backend now exposes a dedicated endpoint:
+
+```bash
+curl -X POST http://127.0.0.1:8000/api/skill/latest-topic-search \
+  -H 'Content-Type: application/json' \
+  -d '{"topic":"diffusion transformers for video generation"}'
+```
+
+Behavior is fixed for v1:
+
+- Venues: `NeurIPS`, `ICML`, `ICLR`, `CVPR`
+- Year selection: latest year already indexed locally for each venue
+- Per-venue results: `10`
+- Relevance scoring: enabled
+- Bilingual translation: disabled
+- Failure mode: partial success with per-venue failure details in `failures`
+
+Response shape:
+
+- `topic`, `keywords`, `expanded_keywords`
+- `venues[]` with `venue`, `selected_year`, `status`, `total_candidates`, `papers`
+- `papers[]` with `rank`, metadata, `pdf_url`, `forum_url`, `relevance_score`, `relevance_reason`
+- `failures[]` and `summary`
+
+## Local Skill
+
+A repository-local skill is available at `skills/openreview-latest-topic-search/`.
+
+Use it by calling the bundled script:
+
+```bash
+python3 skills/openreview-latest-topic-search/scripts/search_latest_topic.py \
+  --topic "diffusion transformers for video generation"
+```
+
+Optional configuration:
+
+- `OPENREVIEW_SEARCH_BASE_URL`: backend base URL, default `http://127.0.0.1:8000`
+
 ## Search History
 
 - Automatically saves query + result snapshot in browser `localStorage`.
@@ -176,6 +217,11 @@ openreview_search/
 │       ├── api.ts
 │       ├── types.ts
 │       └── App.tsx
+├── skills/
+│   └── openreview-latest-topic-search/
+│       ├── SKILL.md
+│       └── scripts/
+│           └── search_latest_topic.py
 ├── storage/
 │   ├── papers_data/
 │   └── vector_db/

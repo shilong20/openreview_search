@@ -14,6 +14,7 @@ from ..core.indexer import build_index, is_indexed, list_indexed_years
 from ..core.keyword_extractor import extract_keywords
 from ..core.search_engine import hybrid_search
 from ..core.evaluator import evaluate_relevance
+from ..core.skill_search import search_latest_topic_for_skill
 from ..core.translator import translate_papers_bilingual
 
 router = APIRouter()
@@ -47,6 +48,10 @@ class SearchRequest(BaseModel):
     use_chinese_relevance_reason: bool = True
     vector_weight: float = Field(default=1.0, ge=0.0)
     keyword_weight: float = Field(default=1.0, ge=0.0)
+
+
+class SkillLatestTopicSearchRequest(BaseModel):
+    topic: str = Field(..., min_length=3)
 
 
 class PaperResult(BaseModel):
@@ -269,3 +274,9 @@ def search_papers(req: SearchRequest) -> dict[str, Any]:
         "expanded_keywords": kw_result["expanded"],
         "total_candidates": len(candidates),
     }
+
+
+@router.post("/skill/latest-topic-search")
+def skill_latest_topic_search(req: SkillLatestTopicSearchRequest) -> dict[str, Any]:
+    """Search latest locally indexed flagship-conference papers for skill usage."""
+    return search_latest_topic_for_skill(req.topic)

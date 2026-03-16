@@ -44,7 +44,9 @@ trap cleanup EXIT INT TERM
 echo "Starting backend on http://localhost:${BACKEND_PORT}"
 (
   source venv/bin/activate
-  exec uvicorn backend.main:app --host 0.0.0.0 --port "$BACKEND_PORT" --reload
+  exec uvicorn backend.main:app --host 0.0.0.0 --port "$BACKEND_PORT" --reload \
+    --reload-include '*.py' \
+    --reload-include '.env'
 ) &
 BACKEND_PID=$!
 
