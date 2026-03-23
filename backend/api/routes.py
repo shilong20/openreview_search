@@ -14,7 +14,7 @@ from ..core.indexer import build_index, is_indexed, list_indexed_years
 from ..core.keyword_extractor import extract_keywords
 from ..core.search_engine import hybrid_search
 from ..core.evaluator import evaluate_relevance
-from ..core.skill_search import search_latest_topic_for_skill
+from ..core.skill_search import search_latest_topic_for_skill, search_multi_venues, resolve_auto_latest_venues
 from ..core.translator import translate_papers_bilingual
 
 router = APIRouter()
@@ -48,6 +48,22 @@ class SearchRequest(BaseModel):
     use_chinese_relevance_reason: bool = True
     vector_weight: float = Field(default=1.0, ge=0.0)
     keyword_weight: float = Field(default=1.0, ge=0.0)
+
+
+class VenueYearPair(BaseModel):
+    venue: str
+    year: int
+
+
+class MultiSearchRequest(BaseModel):
+    research_description: str = Field(..., min_length=3)
+    venues: list[VenueYearPair] | None = None
+    auto_latest: bool = True
+    top_k: int = Field(default=10, ge=1, le=200)
+    max_concurrent: int = Field(default=10, ge=1, le=20)
+    use_llm_eval: bool = True
+    use_chinese_relevance_reason: bool = True
+    use_bilingual_translation: bool = False
 
 
 class SkillLatestTopicSearchRequest(BaseModel):
@@ -274,6 +290,35 @@ def search_papers(req: SearchRequest) -> dict[str, Any]:
         "expanded_keywords": kw_result["expanded"],
         "total_candidates": len(candidates),
     }
+
+
+@router.post("/multi-search")
+def multi_search(req: MultiSearchRequest) -> dict[str, Any]:
+    """Search multiple venues at once. Supports auto-latest and custom venue selection."""
+    if req.auto_latest:
+        venue_pairs = resolve_auto_latest_venues()
+        if not venue_pairs:
+            raise HTTPException(
+                status_code=400,
+                detail="No indexed venues found. Please fetch and index data first.",
+            )
+    else:
+        if not req.venues:
+            raise HTTPException(
+                status_code=400,
+                detail="venues is required when auto_latest is false.",
+            )
+        venue_pairs = [(v.venue, v.year) for v in req.venues]
+
+    return search_multi_venues(
+        topic=req.research_description,
+        venue_year_pairs=venue_pairs,
+        top_k=req.top_k,
+        max_concurrent=req.max_concurrent,
+        use_llm_eval=req.use_llm_eval,
+        use_chinese_reason=req.use_chinese_relevance_reason,
+        use_bilingual_translation=req.use_bilingual_translation,
+    )
 
 
 @router.post("/skill/latest-topic-search")
