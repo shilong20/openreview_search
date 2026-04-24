@@ -4,6 +4,7 @@ import { DataManager } from './components/DataManager'
 import { SearchPanel } from './components/SearchPanel'
 import { SearchHistory } from './components/SearchHistory'
 import { ResultsList } from './components/ResultsList'
+import { MultiResultsList } from './components/MultiResultsList'
 import { api } from './api'
 import type { Venue, SearchResult, MultiSearchResult, SearchHistoryItem } from './types'
 
@@ -199,7 +200,12 @@ export default function App() {
 
             {/* Right: results */}
             <div className="lg:col-span-2">
-              {searchResult && searchMeta ? (
+              {activeResultMode === 'multi' && multiSearchResult ? (
+                <MultiResultsList
+                  result={multiSearchResult}
+                  description={multiSearchResult.topic}
+                />
+              ) : searchResult && searchMeta ? (
                 <ResultsList
                   result={searchResult}
                   venue={searchMeta.venue}
