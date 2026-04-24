@@ -21,6 +21,8 @@
 - 混合检索：向量检索 + 关键词匹配 + RRF 融合。
 - 可选 LLM 相关性重排，且可控制理由语言（中文/英文）。
 - 可选标题/摘要双语输出（英文 + 中文）。
+- **多会议检索**：一键搜索所有已索引会议，或自定义会议+年份组合。
+- **SSE 实时进度**：逐篇论文评分与翻译进度实时推送。
 - 前端内置搜索历史记录（浏览器本地持久化）。
 
 ## 快速开始
@@ -91,13 +93,22 @@ npm run dev
 
 `Search` -> 输入 `Research Interests` -> 点击 `Search`。
 
+提供两种搜索模式：
+
+- **Single Venue**：选择单个会议 + 年份（经典模式）。
+- **Multi Venue**：跨多个会议同时搜索。
+  - *One-Click*：自动使用所有已索引会议的最新年份。
+  - *Custom*：自定义选择会议+年份组合（同一会议可选多个年份）。
+
 执行流程：
 
 1. 关键词提取与扩展（LLM）。
 2. 混合检索（向量 + 关键词 + RRF）。
-3. 可选 LLM 相关性评分（`use_llm_eval`）。
-4. 可选双语翻译（最终 `top_k`，`use_bilingual_translation`）。
+3. 可选 LLM 相关性评分（`use_llm_eval`），附 SSE 实时进度。
+4. 可选双语翻译（最终 `top_k`，`use_bilingual_translation`），附 SSE 实时进度。
 5. 返回排序结果并展示。
+
+多会议结果支持两种视图：**分组视图**（按会议分组可折叠）和**混合排序**（所有论文按相关性降序）。
 
 ![Search 界面](./search.png)
 
@@ -106,8 +117,8 @@ npm run dev
 `Search` -> `Show advanced options`：
 
 - `Top K results`：
-  - 前端默认：`10`
-  - 前端范围：`10..100`（步长 `10`）
+  - 前端默认：`25`
+  - 前端范围：`5..50`（步长 `5`）
   - 后端接口默认：`10`
 - `LLM relevance scoring`（`use_llm_eval`）
 - `Relevance reason in Chinese`（`use_chinese_relevance_reason`）
@@ -119,6 +130,25 @@ npm run dev
 
 - `paper_search_use_bilingual_translation_v1`
 - `paper_search_use_chinese_relevance_reason_v1`
+
+## 多会议搜索接口
+
+```bash
+curl -X POST http://127.0.0.1:8000/api/multi-search \
+  -H 'Content-Type: application/json' \
+  -d '{"research_description":"高效 LLM 训练","auto_latest":true,"top_k":10,"use_llm_eval":true}'
+```
+
+该接口返回 SSE 流，包含 `progress` 进度事件和最终 `result` 事件。
+
+参数：
+
+- `research_description`（必填）：研究兴趣的自然语言描述
+- `auto_latest`（默认 `true`）：自动选择每个会议最新已索引年份
+- `venues`：手动指定 `{venue, year}` 列表（当 `auto_latest=false` 时）
+- `top_k`、`use_llm_eval`、`use_chinese_relevance_reason`、`use_bilingual_translation`
+
+响应包含 `venues[]`（各会议结果）、`failures[]` 和 `summary`。
 
 ## Skill 接口
 
@@ -212,6 +242,8 @@ openreview_search/
 │       ├── components/
 │       │   ├── DataManager.tsx
 │       │   ├── SearchPanel.tsx
+│       │   ├── MultiSearchPanel.tsx
+│       │   ├── MultiResultsList.tsx
 │       │   ├── SearchHistory.tsx
 │       │   └── ResultsList.tsx
 │       ├── api.ts
