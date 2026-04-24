@@ -5,7 +5,7 @@ import { SearchPanel } from './components/SearchPanel'
 import { SearchHistory } from './components/SearchHistory'
 import { ResultsList } from './components/ResultsList'
 import { api } from './api'
-import type { Venue, SearchResult, SearchHistoryItem } from './types'
+import type { Venue, SearchResult, MultiSearchResult, SearchHistoryItem } from './types'
 
 type Tab = 'search' | 'data'
 const HISTORY_STORAGE_KEY = 'paper_search_history_v1'
@@ -38,6 +38,8 @@ export default function App() {
   const [venues, setVenues] = useState<Venue[]>([])
   const [searchResult, setSearchResult] = useState<SearchResult | null>(null)
   const [searchMeta, setSearchMeta] = useState<{ venue: string; year: number; description: string } | null>(null)
+  const [multiSearchResult, setMultiSearchResult] = useState<MultiSearchResult | null>(null)
+  const [activeResultMode, setActiveResultMode] = useState<'single' | 'multi'>('single')
   const [searchHistory, setSearchHistory] = useState<SearchHistoryItem[]>(loadInitialHistory)
 
   const loadVenues = useCallback(async () => {
@@ -65,6 +67,8 @@ export default function App() {
   const handleResults = (result: SearchResult, venue: string, year: number, description: string) => {
     setSearchResult(result)
     setSearchMeta({ venue, year, description })
+    setMultiSearchResult(null)
+    setActiveResultMode('single')
 
     const newItem: SearchHistoryItem = {
       id: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
@@ -73,23 +77,59 @@ export default function App() {
       year,
       description,
       result,
+      mode: 'single',
     }
 
     setSearchHistory(prev => {
       const deduped = prev.filter(
-        item => !(item.venue === venue && item.year === year && item.description === description)
+        item => !(item.mode !== 'multi' && item.venue === venue && item.year === year && item.description === description)
+      )
+      return [newItem, ...deduped].slice(0, HISTORY_LIMIT)
+    })
+  }
+
+  const handleMultiResults = (result: MultiSearchResult, description: string) => {
+    setMultiSearchResult(result)
+    setSearchResult(null)
+    setSearchMeta(null)
+    setActiveResultMode('multi')
+
+    const newItem: SearchHistoryItem = {
+      id: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      created_at: new Date().toISOString(),
+      venue: 'Multi',
+      year: 0,
+      description,
+      result: { papers: [], keywords: result.keywords, expanded_keywords: result.expanded_keywords, total_candidates: 0 },
+      mode: 'multi',
+      selectedVenues: result.venues.map(v => ({ venue: v.venue, year: v.selected_year })),
+      multiResult: result,
+    }
+
+    setSearchHistory(prev => {
+      const deduped = prev.filter(
+        item => !(item.mode === 'multi' && item.description === description)
       )
       return [newItem, ...deduped].slice(0, HISTORY_LIMIT)
     })
   }
 
   const handleOpenHistory = (item: SearchHistoryItem) => {
-    setSearchResult(item.result)
-    setSearchMeta({
-      venue: item.venue,
-      year: item.year,
-      description: item.description,
-    })
+    if (item.mode === 'multi' && item.multiResult) {
+      setMultiSearchResult(item.multiResult)
+      setSearchResult(null)
+      setSearchMeta(null)
+      setActiveResultMode('multi')
+    } else {
+      setSearchResult(item.result)
+      setSearchMeta({
+        venue: item.venue,
+        year: item.year,
+        description: item.description,
+      })
+      setMultiSearchResult(null)
+      setActiveResultMode('single')
+    }
     setTab('search')
   }
 
@@ -148,7 +188,7 @@ export default function App() {
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Left: search panel */}
             <div className="lg:col-span-1 space-y-4">
-              <SearchPanel venues={venues} onResults={handleResults} />
+              <SearchPanel venues={venues} onResults={handleResults} onMultiResults={handleMultiResults} />
               <SearchHistory
                 items={searchHistory}
                 onLoad={handleOpenHistory}

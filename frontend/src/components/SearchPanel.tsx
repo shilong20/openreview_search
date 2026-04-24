@@ -1,17 +1,22 @@
 import { useEffect, useState, useRef } from 'react'
-import { Search, Settings, Loader2 } from 'lucide-react'
-import type { Venue, SearchResult } from '../types'
+import { Search, Settings, Loader2, Globe } from 'lucide-react'
+import type { Venue, SearchResult, MultiSearchResult } from '../types'
 import { api } from '../api'
+import { MultiSearchPanel } from './MultiSearchPanel'
+
+type SearchMode = 'single' | 'multi'
 
 interface Props {
   venues: Venue[]
   onResults: (result: SearchResult, venue: string, year: number, description: string) => void
+  onMultiResults: (result: MultiSearchResult, description: string) => void
 }
 
 const BILINGUAL_TRANSLATION_KEY = 'paper_search_use_bilingual_translation_v1'
 const CHINESE_REASON_KEY = 'paper_search_use_chinese_relevance_reason_v1'
 
-export function SearchPanel({ venues, onResults }: Props) {
+export function SearchPanel({ venues, onResults, onMultiResults }: Props) {
+  const [searchMode, setSearchMode] = useState<SearchMode>('single')
   const [venue, setVenue] = useState('')
   const [year, setYear] = useState<number>(0)
   const [description, setDescription] = useState('')
@@ -136,6 +141,36 @@ export function SearchPanel({ venues, onResults }: Props) {
         Search Papers
       </h2>
 
+      {/* Mode tabs */}
+      <div className="flex gap-1 p-1 bg-gray-100 rounded-lg mb-4">
+        <button
+          onClick={() => setSearchMode('single')}
+          className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+            searchMode === 'single'
+              ? 'bg-white text-indigo-700 shadow-sm'
+              : 'text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          <Search className="w-3 h-3" />
+          Single Venue
+        </button>
+        <button
+          onClick={() => setSearchMode('multi')}
+          className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+            searchMode === 'multi'
+              ? 'bg-white text-indigo-700 shadow-sm'
+              : 'text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          <Globe className="w-3 h-3" />
+          Multi Venue
+        </button>
+      </div>
+
+      {searchMode === 'multi' ? (
+        <MultiSearchPanel venues={venues} onResults={onMultiResults} />
+      ) : (
+      <>
       {/* Conference + Year */}
       <div className="grid grid-cols-2 gap-4 mb-4">
         <div>
@@ -327,6 +362,8 @@ export function SearchPanel({ venues, onResults }: Props) {
           </>
         )}
       </button>
+      </>
+      )}
     </div>
   )
 }
