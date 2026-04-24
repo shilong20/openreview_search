@@ -181,11 +181,13 @@ export default function App() {
 
       {/* Main content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        {tab === 'data' ? (
+        <div className={tab === 'data' ? '' : 'hidden'}>
           <div className="max-w-2xl mx-auto">
             <DataManager venues={venues} onVenuesChange={loadVenues} />
           </div>
-        ) : (
+        </div>
+
+        <div className={tab === 'search' ? '' : 'hidden'}>
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Left: search panel */}
             <div className="lg:col-span-1 space-y-4">
@@ -220,7 +222,7 @@ export default function App() {
               )}
             </div>
           </div>
-        )}
+        </div>
       </main>
     </div>
   )

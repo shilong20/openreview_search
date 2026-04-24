@@ -57,7 +57,7 @@ export function SearchPanel({ venues, onResults, onMultiResults }: Props) {
   const [venue, setVenue] = useState('')
   const [year, setYear] = useState<number>(0)
   const [description, setDescription] = useState('')
-  const [topK, setTopK] = useState(10)
+  const [topK, setTopK] = useState(25)
   const [useLLM, setUseLLM] = useState(true)
   const [useBilingualTranslation, setUseBilingualTranslation] = useState<boolean>(() => {
     try {
@@ -329,9 +329,9 @@ export function SearchPanel({ venues, onResults, onMultiResults }: Props) {
               </label>
               <input
                 type="range"
-                min={10}
+                min={5}
                 max={100}
-                step={10}
+                step={5}
                 value={topK}
                 onChange={e => setTopK(Number(e.target.value))}
                 className="w-full"

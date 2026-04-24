@@ -50,7 +50,7 @@ function getAllIndexedVenueYears(venues: Venue[]): VenueYearOption[] {
 export function MultiSearchPanel({ venues, onResults }: Props) {
   const [subMode, setSubMode] = useState<SubMode>('auto')
   const [description, setDescription] = useState('')
-  const [topK, setTopK] = useState(10)
+  const [topK, setTopK] = useState(25)
   const [useLLM, setUseLLM] = useState(true)
   const [useBilingualTranslation, setUseBilingualTranslation] = useState<boolean>(() => {
     try {
@@ -301,9 +301,9 @@ export function MultiSearchPanel({ venues, onResults }: Props) {
               </label>
               <input
                 type="range"
-                min={10}
+                min={5}
                 max={100}
-                step={10}
+                step={5}
                 value={topK}
                 onChange={e => setTopK(Number(e.target.value))}
                 className="w-full"
