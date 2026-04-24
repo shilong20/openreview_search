@@ -302,7 +302,7 @@ export function MultiSearchPanel({ venues, onResults }: Props) {
               <input
                 type="range"
                 min={5}
-                max={100}
+                max={50}
                 step={5}
                 value={topK}
                 onChange={e => setTopK(Number(e.target.value))}
