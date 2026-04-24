@@ -1,4 +1,4 @@
-import type { Venue, SearchResult, JobStatus } from './types'
+import type { Venue, SearchResult, MultiSearchResult, JobStatus } from './types'
 
 const BASE = '/api'
 
@@ -48,6 +48,21 @@ export const api = {
     keyword_weight?: number
   }) =>
     request<SearchResult>('/search', {
+      method: 'POST',
+      body: JSON.stringify(params),
+    }),
+
+  multiSearch: (params: {
+    research_description: string
+    venues?: { venue: string; year: number }[]
+    auto_latest?: boolean
+    top_k?: number
+    max_concurrent?: number
+    use_llm_eval?: boolean
+    use_chinese_relevance_reason?: boolean
+    use_bilingual_translation?: boolean
+  }) =>
+    request<MultiSearchResult>('/multi-search', {
       method: 'POST',
       body: JSON.stringify(params),
     }),
