@@ -53,7 +53,19 @@ export function SearchHistory({ items, onLoad, onDelete, onClear }: Props) {
                   {item.description}
                 </div>
                 <div className="mt-1 text-[11px] text-gray-500">
-                  {item.venue} {item.year} · {item.result.papers.length} results
+                  {item.mode === 'multi' ? (
+                    <>
+                      <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-indigo-50 text-indigo-600 rounded font-medium mr-1">Multi</span>
+                      {item.selectedVenues
+                        ? item.selectedVenues.map(v => v.venue).join(', ')
+                        : 'Multiple venues'}
+                      {item.multiResult && ` · ${item.multiResult.summary.returned_papers} results`}
+                    </>
+                  ) : (
+                    <>
+                      {item.venue} {item.year} · {item.result.papers.length} results
+                    </>
+                  )}
                 </div>
                 <div className="mt-1 flex items-center gap-1 text-[11px] text-gray-400">
                   <Clock3 className="w-3 h-3" />

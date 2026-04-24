@@ -21,6 +21,8 @@ Search and rank top AI conference papers by research relevance.
 - Hybrid retrieval pipeline: vector search + keyword matching + RRF fusion.
 - Optional LLM relevance reranking with controllable reason language (Chinese/English).
 - Optional bilingual output for title and abstract (EN + ZH).
+- **Multi-venue search**: one-click search across all indexed venues, or custom venue+year selection.
+- **SSE streaming progress**: real-time per-paper scoring and translation progress.
 - Search history saved in browser `localStorage`.
 
 ## Quick Start
@@ -91,13 +93,22 @@ What happens:
 
 `Search` -> enter `Research Interests` -> click `Search`.
 
+Two search modes are available:
+
+- **Single Venue**: select one conference + year (classic mode).
+- **Multi Venue**: search across multiple venues at once.
+  - *One-Click*: automatically uses all indexed venues with their latest year.
+  - *Custom*: select specific venue+year combinations (same venue, multiple years supported).
+
 Pipeline:
 
 1. Keyword extraction and expansion (LLM).
 2. Hybrid retrieval (vector + keyword + RRF).
 3. Optional LLM relevance scoring (`use_llm_eval`).
 4. Optional bilingual translation for final `top_k` (`use_bilingual_translation`).
-5. Return ranked results to UI.
+5. Return ranked results to UI with real-time SSE progress.
+
+Multi-venue results support two views: **Grouped** (by venue, collapsible) and **Merged** (all papers sorted by relevance score).
 
 ![Search UI](./search.png)
 
@@ -106,8 +117,8 @@ Pipeline:
 In `Search` -> `Show advanced options`:
 
 - `Top K results`:
-  - UI default: `10`
-  - UI range: `10..100` (step `10`)
+  - UI default: `25`
+  - UI range: `5..50` (step `5`)
   - API default: `10`
 - `LLM relevance scoring` (`use_llm_eval`)
 - `Relevance reason in Chinese` (`use_chinese_relevance_reason`)
@@ -119,6 +130,25 @@ Persistent UI preferences in browser `localStorage`:
 
 - `paper_search_use_bilingual_translation_v1`
 - `paper_search_use_chinese_relevance_reason_v1`
+
+## Multi-Search API
+
+```bash
+curl -X POST http://127.0.0.1:8000/api/multi-search \
+  -H 'Content-Type: application/json' \
+  -d '{"research_description":"efficient LLM training","auto_latest":true,"top_k":10,"use_llm_eval":true}'
+```
+
+The endpoint returns an SSE stream with `progress` events and a final `result` event.
+
+Parameters:
+
+- `research_description` (required): natural language description
+- `auto_latest` (default `true`): auto-select latest indexed year per venue
+- `venues`: manual list of `{venue, year}` pairs (when `auto_latest=false`)
+- `top_k`, `use_llm_eval`, `use_chinese_relevance_reason`, `use_bilingual_translation`
+
+Response includes `venues[]` with per-venue results, `failures[]`, and `summary`.
 
 ## Skill API
 
@@ -212,6 +242,8 @@ openreview_search/
 │       ├── components/
 │       │   ├── DataManager.tsx
 │       │   ├── SearchPanel.tsx
+│       │   ├── MultiSearchPanel.tsx
+│       │   ├── MultiResultsList.tsx
 │       │   ├── SearchHistory.tsx
 │       │   └── ResultsList.tsx
 │       ├── api.ts

@@ -1,21 +1,63 @@
-import { useEffect, useState, useRef } from 'react'
-import { Search, Settings, Loader2 } from 'lucide-react'
-import type { Venue, SearchResult } from '../types'
+import { useEffect, useState, useRef, useCallback } from 'react'
+import { Search, Settings, Loader2, Globe } from 'lucide-react'
+import type { Venue, SearchResult, MultiSearchResult, SearchProgress } from '../types'
 import { api } from '../api'
+import { MultiSearchPanel } from './MultiSearchPanel'
+
+type SearchMode = 'single' | 'multi'
 
 interface Props {
   venues: Venue[]
   onResults: (result: SearchResult, venue: string, year: number, description: string) => void
+  onMultiResults: (result: MultiSearchResult, description: string) => void
 }
 
 const BILINGUAL_TRANSLATION_KEY = 'paper_search_use_bilingual_translation_v1'
 const CHINESE_REASON_KEY = 'paper_search_use_chinese_relevance_reason_v1'
 
-export function SearchPanel({ venues, onResults }: Props) {
+function useElapsedTime(running: boolean) {
+  const [elapsed, setElapsed] = useState(0)
+  const startRef = useRef(0)
+
+  useEffect(() => {
+    if (!running) {
+      setElapsed(0)
+      return
+    }
+    startRef.current = Date.now()
+    setElapsed(0)
+    const timer = setInterval(() => {
+      setElapsed(Math.floor((Date.now() - startRef.current) / 1000))
+    }, 1000)
+    return () => clearInterval(timer)
+  }, [running])
+
+  return elapsed
+}
+
+function formatElapsed(seconds: number): string {
+  if (seconds < 60) return `${seconds}s`
+  const m = Math.floor(seconds / 60)
+  const s = seconds % 60
+  return `${m}m ${s}s`
+}
+
+function getProgressHint(elapsed: number, useLLM: boolean, isBilingual: boolean): string {
+  if (elapsed < 3) return 'Extracting keywords...'
+  if (elapsed < 8) return 'Searching papers...'
+  if (useLLM && elapsed < 60) return 'LLM scoring papers...'
+  if (useLLM && elapsed < 180) return 'Still scoring... this may take a while'
+  if (isBilingual && elapsed >= 60) return 'Translating results...'
+  if (elapsed >= 180) return 'Almost there...'
+  return 'Processing...'
+}
+
+export function SearchPanel({ venues, onResults, onMultiResults }: Props) {
+  const [searchMode, setSearchMode] = useState<SearchMode>('single')
   const [venue, setVenue] = useState('')
   const [year, setYear] = useState<number>(0)
   const [description, setDescription] = useState('')
-  const [topK, setTopK] = useState(10)
+  const [topK, setTopK] = useState(25)
   const [useLLM, setUseLLM] = useState(true)
   const [useBilingualTranslation, setUseBilingualTranslation] = useState<boolean>(() => {
     try {
@@ -38,6 +80,8 @@ export function SearchPanel({ venues, onResults }: Props) {
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [progress, setProgress] = useState<SearchProgress | null>(null)
+  const elapsed = useElapsedTime(loading)
 
   const [customYear, setCustomYear] = useState('')
   const [showCustomInput, setShowCustomInput] = useState(false)
@@ -111,21 +155,26 @@ export function SearchPanel({ venues, onResults }: Props) {
     if (!canSearch) return
     setLoading(true)
     setError('')
+    setProgress(null)
     try {
-      const result = await api.search({
-        venue,
-        year,
-        research_description: description.trim(),
-        top_k: topK,
-        use_llm_eval: useLLM,
-        use_bilingual_translation: useBilingualTranslation,
-        use_chinese_relevance_reason: useChineseReason,
-      })
+      const result = await api.search(
+        {
+          venue,
+          year,
+          research_description: description.trim(),
+          top_k: topK,
+          use_llm_eval: useLLM,
+          use_bilingual_translation: useBilingualTranslation,
+          use_chinese_relevance_reason: useChineseReason,
+        },
+        (p) => setProgress(p),
+      )
       onResults(result, venue, year, description.trim())
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Search failed')
     } finally {
       setLoading(false)
+      setProgress(null)
     }
   }
 
@@ -136,6 +185,36 @@ export function SearchPanel({ venues, onResults }: Props) {
         Search Papers
       </h2>
 
+      {/* Mode tabs */}
+      <div className="flex gap-1 p-1 bg-gray-100 rounded-lg mb-4">
+        <button
+          onClick={() => setSearchMode('single')}
+          className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+            searchMode === 'single'
+              ? 'bg-white text-indigo-700 shadow-sm'
+              : 'text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          <Search className="w-3 h-3" />
+          Single Venue
+        </button>
+        <button
+          onClick={() => setSearchMode('multi')}
+          className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+            searchMode === 'multi'
+              ? 'bg-white text-indigo-700 shadow-sm'
+              : 'text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          <Globe className="w-3 h-3" />
+          Multi Venue
+        </button>
+      </div>
+
+      {searchMode === 'multi' ? (
+        <MultiSearchPanel venues={venues} onResults={onMultiResults} />
+      ) : (
+      <>
       {/* Conference + Year */}
       <div className="grid grid-cols-2 gap-4 mb-4">
         <div>
@@ -250,9 +329,9 @@ export function SearchPanel({ venues, onResults }: Props) {
               </label>
               <input
                 type="range"
-                min={10}
-                max={100}
-                step={10}
+                min={5}
+                max={50}
+                step={5}
                 value={topK}
                 onChange={e => setTopK(Number(e.target.value))}
                 className="w-full"
@@ -318,7 +397,7 @@ export function SearchPanel({ venues, onResults }: Props) {
         {loading ? (
           <>
             <Loader2 className="w-4 h-4 animate-spin" />
-            {`Searching${useLLM ? ' & Evaluating' : ''}${useBilingualTranslation ? ' & Translating' : ''}...`}
+            Searching...
           </>
         ) : (
           <>
@@ -327,6 +406,17 @@ export function SearchPanel({ venues, onResults }: Props) {
           </>
         )}
       </button>
+
+      {/* Progress hint */}
+      {loading && (
+        <div className="mt-2 text-center text-xs text-gray-500">
+          <span className="font-mono text-indigo-600">{formatElapsed(elapsed)}</span>
+          {' · '}
+          {progress?.message || getProgressHint(elapsed, useLLM, useBilingualTranslation)}
+        </div>
+      )}
+      </>
+      )}
     </div>
   )
 }

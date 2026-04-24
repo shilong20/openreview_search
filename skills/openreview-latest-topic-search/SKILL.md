@@ -10,7 +10,7 @@ Use this skill when the user wants topic-based paper recommendations from the fo
 ## Workflow
 
 1. Make sure the local `openreview_search` backend is running.
-2. Run the bundled script:
+2. Run the bundled script. This request may take several minutes because the backend performs keyword extraction, multi-venue retrieval, and LLM relevance scoring. During testing, do not assume the agent is stuck just because there is no immediate output; allow up to 10 minutes before treating it as a timeout or failure.
 
 ```bash
 python3 scripts/search_latest_topic.py --topic "your topic here"
@@ -35,4 +35,5 @@ python3 scripts/search_latest_topic.py --topic "your topic here"
 ## Notes
 
 - If the backend is unreachable or a venue has no indexed local year, fail explicitly instead of inventing results.
+- This skill can be slow in real runs. Agents should treat it as a potentially long-running call and avoid declaring it hung too early when no intermediate output is shown.
 - Keep the output structured. Do not rewrite field names unless the user asks for a different format.

@@ -36,6 +36,28 @@ export interface SearchResult {
   total_candidates: number
 }
 
+export interface VenueResult {
+  venue: string
+  selected_year: number
+  status: 'ok' | 'empty' | 'error'
+  total_candidates: number
+  papers: Paper[]
+}
+
+export interface MultiSearchResult {
+  topic: string
+  keywords: string[]
+  expanded_keywords: string[]
+  venues: VenueResult[]
+  failures: { venue: string; stage: string; reason: string }[]
+  summary: {
+    requested_venues: number
+    successful_venues: number
+    failed_venues: number
+    returned_papers: number
+  }
+}
+
 export interface SearchHistoryItem {
   id: string
   created_at: string
@@ -43,6 +65,20 @@ export interface SearchHistoryItem {
   year: number
   description: string
   result: SearchResult
+  mode?: 'single' | 'multi'
+  selectedVenues?: { venue: string; year: number }[]
+  multiResult?: MultiSearchResult
+}
+
+export interface SearchProgress {
+  stage: string
+  venue?: string
+  year?: number
+  evaluated?: number
+  translated?: number
+  total?: number
+  papers?: number
+  message?: string
 }
 
 export interface JobStatus {
