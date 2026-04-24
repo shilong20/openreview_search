@@ -70,6 +70,17 @@ export interface SearchHistoryItem {
   multiResult?: MultiSearchResult
 }
 
+export interface SearchProgress {
+  stage: string
+  venue?: string
+  year?: number
+  evaluated?: number
+  translated?: number
+  total?: number
+  papers?: number
+  message?: string
+}
+
 export interface JobStatus {
   status: 'not_started' | 'running' | 'done' | 'error' | 'already_running'
   progress?: number

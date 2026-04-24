@@ -1,6 +1,6 @@
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, useCallback } from 'react'
 import { Search, Settings, Loader2, Globe } from 'lucide-react'
-import type { Venue, SearchResult, MultiSearchResult } from '../types'
+import type { Venue, SearchResult, MultiSearchResult, SearchProgress } from '../types'
 import { api } from '../api'
 import { MultiSearchPanel } from './MultiSearchPanel'
 
@@ -14,6 +14,43 @@ interface Props {
 
 const BILINGUAL_TRANSLATION_KEY = 'paper_search_use_bilingual_translation_v1'
 const CHINESE_REASON_KEY = 'paper_search_use_chinese_relevance_reason_v1'
+
+function useElapsedTime(running: boolean) {
+  const [elapsed, setElapsed] = useState(0)
+  const startRef = useRef(0)
+
+  useEffect(() => {
+    if (!running) {
+      setElapsed(0)
+      return
+    }
+    startRef.current = Date.now()
+    setElapsed(0)
+    const timer = setInterval(() => {
+      setElapsed(Math.floor((Date.now() - startRef.current) / 1000))
+    }, 1000)
+    return () => clearInterval(timer)
+  }, [running])
+
+  return elapsed
+}
+
+function formatElapsed(seconds: number): string {
+  if (seconds < 60) return `${seconds}s`
+  const m = Math.floor(seconds / 60)
+  const s = seconds % 60
+  return `${m}m ${s}s`
+}
+
+function getProgressHint(elapsed: number, useLLM: boolean, isBilingual: boolean): string {
+  if (elapsed < 3) return 'Extracting keywords...'
+  if (elapsed < 8) return 'Searching papers...'
+  if (useLLM && elapsed < 60) return 'LLM scoring papers...'
+  if (useLLM && elapsed < 180) return 'Still scoring... this may take a while'
+  if (isBilingual && elapsed >= 60) return 'Translating results...'
+  if (elapsed >= 180) return 'Almost there...'
+  return 'Processing...'
+}
 
 export function SearchPanel({ venues, onResults, onMultiResults }: Props) {
   const [searchMode, setSearchMode] = useState<SearchMode>('single')
@@ -43,6 +80,8 @@ export function SearchPanel({ venues, onResults, onMultiResults }: Props) {
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [progress, setProgress] = useState<SearchProgress | null>(null)
+  const elapsed = useElapsedTime(loading)
 
   const [customYear, setCustomYear] = useState('')
   const [showCustomInput, setShowCustomInput] = useState(false)
@@ -116,21 +155,26 @@ export function SearchPanel({ venues, onResults, onMultiResults }: Props) {
     if (!canSearch) return
     setLoading(true)
     setError('')
+    setProgress(null)
     try {
-      const result = await api.search({
-        venue,
-        year,
-        research_description: description.trim(),
-        top_k: topK,
-        use_llm_eval: useLLM,
-        use_bilingual_translation: useBilingualTranslation,
-        use_chinese_relevance_reason: useChineseReason,
-      })
+      const result = await api.search(
+        {
+          venue,
+          year,
+          research_description: description.trim(),
+          top_k: topK,
+          use_llm_eval: useLLM,
+          use_bilingual_translation: useBilingualTranslation,
+          use_chinese_relevance_reason: useChineseReason,
+        },
+        (p) => setProgress(p),
+      )
       onResults(result, venue, year, description.trim())
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Search failed')
     } finally {
       setLoading(false)
+      setProgress(null)
     }
   }
 
@@ -353,7 +397,7 @@ export function SearchPanel({ venues, onResults, onMultiResults }: Props) {
         {loading ? (
           <>
             <Loader2 className="w-4 h-4 animate-spin" />
-            {`Searching${useLLM ? ' & Evaluating' : ''}${useBilingualTranslation ? ' & Translating' : ''}...`}
+            Searching...
           </>
         ) : (
           <>
@@ -362,6 +406,15 @@ export function SearchPanel({ venues, onResults, onMultiResults }: Props) {
           </>
         )}
       </button>
+
+      {/* Progress hint */}
+      {loading && (
+        <div className="mt-2 text-center text-xs text-gray-500">
+          <span className="font-mono text-indigo-600">{formatElapsed(elapsed)}</span>
+          {' · '}
+          {progress?.message || getProgressHint(elapsed, useLLM, useBilingualTranslation)}
+        </div>
+      )}
       </>
       )}
     </div>

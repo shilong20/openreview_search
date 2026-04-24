@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Search, Settings, Loader2, Zap, SlidersHorizontal } from 'lucide-react'
-import type { Venue, MultiSearchResult } from '../types'
+import type { Venue, MultiSearchResult, SearchProgress } from '../types'
 import { api } from '../api'
 
 interface Props {
@@ -13,12 +13,38 @@ type SubMode = 'auto' | 'custom'
 const BILINGUAL_TRANSLATION_KEY = 'paper_search_use_bilingual_translation_v1'
 const CHINESE_REASON_KEY = 'paper_search_use_chinese_relevance_reason_v1'
 
+interface VenueYearOption {
+  venue: string
+  displayName: string
+  year: number
+  key: string
+}
+
 function getLatestIndexedYear(venue: Venue): number | null {
   const years = Object.entries(venue.status)
     .filter(([, s]) => s.indexed)
     .map(([y]) => Number(y))
     .sort((a, b) => b - a)
   return years[0] ?? null
+}
+
+function getAllIndexedVenueYears(venues: Venue[]): VenueYearOption[] {
+  const options: VenueYearOption[] = []
+  for (const v of venues) {
+    const indexedYears = Object.entries(v.status)
+      .filter(([, s]) => s.indexed)
+      .map(([y]) => Number(y))
+      .sort((a, b) => b - a)
+    for (const y of indexedYears) {
+      options.push({
+        venue: v.name,
+        displayName: v.display_name,
+        year: y,
+        key: `${v.name}_${y}`,
+      })
+    }
+  }
+  return options
 }
 
 export function MultiSearchPanel({ venues, onResults }: Props) {
@@ -47,21 +73,41 @@ export function MultiSearchPanel({ venues, onResults }: Props) {
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [progress, setProgress] = useState<SearchProgress | null>(null)
+  const [elapsed, setElapsed] = useState(0)
+  const startRef = useRef(0)
 
-  const [selectedVenues, setSelectedVenues] = useState<Record<string, boolean>>({})
-  const [venueYearOverrides, setVenueYearOverrides] = useState<Record<string, number>>({})
+  useEffect(() => {
+    if (!loading) {
+      setElapsed(0)
+      return
+    }
+    startRef.current = Date.now()
+    setElapsed(0)
+    const timer = setInterval(() => {
+      setElapsed(Math.floor((Date.now() - startRef.current) / 1000))
+    }, 1000)
+    return () => clearInterval(timer)
+  }, [loading])
+
+  const [selectedKeys, setSelectedKeys] = useState<Record<string, boolean>>({})
 
   const indexedVenues = venues.filter(v => getLatestIndexedYear(v) !== null)
+  const allVenueYears = getAllIndexedVenueYears(venues)
 
   useEffect(() => {
     const defaults: Record<string, boolean> = {}
-    indexedVenues.forEach(v => {
-      if (selectedVenues[v.name] === undefined) {
-        defaults[v.name] = true
+    for (const v of indexedVenues) {
+      const latestYear = getLatestIndexedYear(v)
+      if (latestYear !== null) {
+        const key = `${v.name}_${latestYear}`
+        if (selectedKeys[key] === undefined) {
+          defaults[key] = true
+        }
       }
-    })
+    }
     if (Object.keys(defaults).length > 0) {
-      setSelectedVenues(prev => ({ ...defaults, ...prev }))
+      setSelectedKeys(prev => ({ ...defaults, ...prev }))
     }
   }, [venues])
 
@@ -77,33 +123,29 @@ export function MultiSearchPanel({ venues, onResults }: Props) {
     } catch { /* ignore */ }
   }, [useChineseReason])
 
-  const toggleVenue = (name: string) => {
-    setSelectedVenues(prev => ({ ...prev, [name]: !prev[name] }))
-  }
-
-  const setYearOverride = (name: string, year: number) => {
-    setVenueYearOverrides(prev => ({ ...prev, [name]: year }))
+  const toggleKey = (key: string) => {
+    setSelectedKeys(prev => ({ ...prev, [key]: !prev[key] }))
   }
 
   const getCustomVenuePairs = () => {
-    return indexedVenues
-      .filter(v => selectedVenues[v.name])
-      .map(v => ({
-        venue: v.name,
-        year: venueYearOverrides[v.name] || getLatestIndexedYear(v)!,
-      }))
+    return allVenueYears
+      .filter(opt => selectedKeys[opt.key])
+      .map(opt => ({ venue: opt.venue, year: opt.year }))
   }
+
+  const selectedCount = getCustomVenuePairs().length
 
   const canSearch = description.trim().length >= 3 && (
     subMode === 'auto'
       ? indexedVenues.length > 0
-      : getCustomVenuePairs().length > 0
+      : selectedCount > 0
   )
 
   const handleSearch = async () => {
     if (!canSearch) return
     setLoading(true)
     setError('')
+    setProgress(null)
     try {
       const params: Parameters<typeof api.multiSearch>[0] = {
         research_description: description.trim(),
@@ -120,12 +162,13 @@ export function MultiSearchPanel({ venues, onResults }: Props) {
         params.venues = getCustomVenuePairs()
       }
 
-      const result = await api.multiSearch(params)
+      const result = await api.multiSearch(params, (p) => setProgress(p))
       onResults(result, description.trim())
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Search failed')
     } finally {
       setLoading(false)
+      setProgress(null)
     }
   }
 
@@ -173,49 +216,54 @@ export function MultiSearchPanel({ venues, onResults }: Props) {
         </div>
       )}
 
-      {/* Custom mode: venue selector */}
+      {/* Custom mode: venue+year selector */}
       {subMode === 'custom' && (
         <div className="space-y-2">
-          {indexedVenues.length === 0 ? (
+          {allVenueYears.length === 0 ? (
             <div className="text-xs text-amber-600 bg-amber-50 rounded-lg px-3 py-2">
               No indexed venues available. Go to Data Manager to fetch and index data.
             </div>
           ) : (
-            <div className="bg-gray-50 rounded-lg p-3 space-y-2">
-              {indexedVenues.map(v => {
-                const latestYear = getLatestIndexedYear(v)!
-                const indexedYears = Object.entries(v.status)
-                  .filter(([, s]) => s.indexed)
-                  .map(([y]) => Number(y))
-                  .sort((a, b) => b - a)
-                const currentYear = venueYearOverrides[v.name] || latestYear
-
-                return (
-                  <div key={v.name} className="flex items-center gap-3">
+            <>
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-gray-500">{selectedCount} selected</span>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => {
+                      const all: Record<string, boolean> = {}
+                      allVenueYears.forEach(opt => { all[opt.key] = true })
+                      setSelectedKeys(all)
+                    }}
+                    className="text-xs text-indigo-600 hover:text-indigo-800"
+                  >
+                    Select all
+                  </button>
+                  <button
+                    onClick={() => setSelectedKeys({})}
+                    className="text-xs text-gray-500 hover:text-gray-700"
+                  >
+                    Clear
+                  </button>
+                </div>
+              </div>
+              <div className="bg-gray-50 rounded-lg p-3 space-y-1.5 max-h-48 overflow-y-auto">
+                {allVenueYears.map(opt => (
+                  <label
+                    key={opt.key}
+                    className="flex items-center gap-2.5 px-1 py-0.5 rounded hover:bg-gray-100 cursor-pointer"
+                  >
                     <input
                       type="checkbox"
-                      id={`venue-${v.name}`}
-                      checked={!!selectedVenues[v.name]}
-                      onChange={() => toggleVenue(v.name)}
+                      checked={!!selectedKeys[opt.key]}
+                      onChange={() => toggleKey(opt.key)}
                       className="rounded"
                     />
-                    <label htmlFor={`venue-${v.name}`} className="text-xs font-medium text-gray-700 w-20">
-                      {v.display_name}
-                    </label>
-                    <select
-                      className="text-xs border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-indigo-400"
-                      value={currentYear}
-                      onChange={e => setYearOverride(v.name, Number(e.target.value))}
-                      disabled={!selectedVenues[v.name]}
-                    >
-                      {indexedYears.map(y => (
-                        <option key={y} value={y}>{y}</option>
-                      ))}
-                    </select>
-                  </div>
-                )
-              })}
-            </div>
+                    <span className="text-xs font-medium text-gray-700 w-20">{opt.displayName}</span>
+                    <span className="text-xs text-gray-500">{opt.year}</span>
+                  </label>
+                ))}
+              </div>
+            </>
           )}
         </div>
       )}
@@ -330,6 +378,28 @@ export function MultiSearchPanel({ venues, onResults }: Props) {
           </>
         )}
       </button>
+
+      {/* Progress hint */}
+      {loading && (
+        <div className="mt-2 space-y-1">
+          <div className="text-center text-xs text-gray-500">
+            <span className="font-mono text-indigo-600">
+              {elapsed < 60 ? `${elapsed}s` : `${Math.floor(elapsed / 60)}m ${elapsed % 60}s`}
+            </span>
+            {' · '}
+            {progress ? (
+              progress.stage === 'keywords' ? 'Extracting keywords...'
+              : progress.stage === 'venue_start' ? `Searching ${progress.venue} ${progress.year}...`
+              : progress.stage === 'eval' ? `${progress.venue} ${progress.year}: scoring ${progress.evaluated}/${progress.total}`
+              : progress.stage === 'translate' ? `${progress.venue} ${progress.year}: translating ${progress.translated}/${progress.total}`
+              : progress.stage === 'venue_done' ? `${progress.venue} ${progress.year}: done (${progress.papers} papers)`
+              : 'Processing...'
+            ) : (
+              'Connecting...'
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -112,13 +112,24 @@ async def _translate_papers_parallel(
     papers: list[dict[str, Any]],
     max_concurrent: int = 10,
     model: str | None = None,
+    progress_callback: Any = None,
 ) -> list[dict[str, Any]]:
     if not papers:
         return []
 
     semaphore = asyncio.Semaphore(max_concurrent)
+    total = len(papers)
+    completed = 0
 
-    tasks = [_translate_single(p, semaphore, model=model) for p in papers]
+    async def _translate_with_progress(paper: dict[str, Any]) -> dict[str, Any]:
+        nonlocal completed
+        result = await _translate_single(paper, semaphore, model=model)
+        completed += 1
+        if progress_callback:
+            progress_callback(completed, total)
+        return result
+
+    tasks = [_translate_with_progress(p) for p in papers]
     results = await asyncio.gather(*tasks, return_exceptions=True)
 
     translated: list[dict[str, Any]] = []
@@ -139,6 +150,7 @@ def translate_papers_bilingual(
     papers: list[dict[str, Any]],
     max_concurrent: int = 10,
     model: str | None = None,
+    progress_callback: Any = None,
 ) -> list[dict[str, Any]]:
     """Translate final papers to bilingual fields: title_zh and abstract_zh."""
     logger.info(f"Translating {len(papers)} papers to bilingual fields...")
@@ -147,6 +159,7 @@ def translate_papers_bilingual(
             papers=papers,
             max_concurrent=max_concurrent,
             model=model,
+            progress_callback=progress_callback,
         )
     )
     logger.success("Bilingual translation complete")

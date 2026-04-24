@@ -70,6 +70,8 @@ def search_single_venue(
     use_llm_eval: bool = True,
     use_chinese_reason: bool = True,
     use_bilingual_translation: bool = False,
+    eval_progress_callback: Any = None,
+    translate_progress_callback: Any = None,
 ) -> dict[str, Any]:
     candidates = hybrid_search(
         query_text=topic,
@@ -97,6 +99,7 @@ def search_single_venue(
             top_k=top_k,
             max_concurrent=max_concurrent,
             use_chinese_reason=use_chinese_reason,
+            progress_callback=eval_progress_callback,
         )
     else:
         papers = candidates[:top_k]
@@ -105,7 +108,11 @@ def search_single_venue(
             p["relevance_reason"] = ""
 
     if use_bilingual_translation:
-        papers = translate_papers_bilingual(papers=papers, max_concurrent=max_concurrent)
+        papers = translate_papers_bilingual(
+            papers=papers,
+            max_concurrent=max_concurrent,
+            progress_callback=translate_progress_callback,
+        )
     else:
         for p in papers:
             p.setdefault("title_zh", p.get("title", ""))
@@ -128,10 +135,22 @@ def search_multi_venues(
     use_llm_eval: bool = True,
     use_chinese_reason: bool = True,
     use_bilingual_translation: bool = False,
+    progress_callback: Any = None,
 ) -> dict[str, Any]:
-    """Search multiple venues, extracting keywords only once."""
+    """Search multiple venues, extracting keywords only once.
+
+    progress_callback(event: dict) is called with:
+      {"stage": "keywords"}
+      {"stage": "venue_start", "venue": ..., "year": ...}
+      {"stage": "eval", "venue": ..., "year": ..., "evaluated": n, "total": m}
+      {"stage": "translate", "venue": ..., "year": ..., "translated": n, "total": m}
+      {"stage": "venue_done", "venue": ..., "year": ..., "papers": n}
+    """
     topic = topic.strip()
     logger.info(f"Multi-venue search: '{topic[:80]}' across {len(venue_year_pairs)} venues")
+
+    if progress_callback:
+        progress_callback({"stage": "keywords"})
 
     kw_result = extract_keywords(topic)
     all_keywords = kw_result["all_terms"]
@@ -140,8 +159,23 @@ def search_multi_venues(
     failures: list[dict[str, str]] = []
 
     for venue, year in venue_year_pairs:
+        if progress_callback:
+            progress_callback({"stage": "venue_start", "venue": venue, "year": year})
+
+        def make_eval_cb(v: str, y: int):
+            def cb(evaluated: int, total: int):
+                if progress_callback:
+                    progress_callback({"stage": "eval", "venue": v, "year": y, "evaluated": evaluated, "total": total})
+            return cb
+
+        def make_translate_cb(v: str, y: int):
+            def cb(translated: int, total: int):
+                if progress_callback:
+                    progress_callback({"stage": "translate", "venue": v, "year": y, "translated": translated, "total": total})
+            return cb
+
         try:
-            venue_results.append(search_single_venue(
+            result = search_single_venue(
                 venue=venue,
                 year=year,
                 topic=topic,
@@ -151,7 +185,12 @@ def search_multi_venues(
                 use_llm_eval=use_llm_eval,
                 use_chinese_reason=use_chinese_reason,
                 use_bilingual_translation=use_bilingual_translation,
-            ))
+                eval_progress_callback=make_eval_cb(venue, year),
+                translate_progress_callback=make_translate_cb(venue, year),
+            )
+            venue_results.append(result)
+            if progress_callback:
+                progress_callback({"stage": "venue_done", "venue": venue, "year": year, "papers": len(result.get("papers", []))})
         except Exception as exc:
             logger.exception(f"Multi-venue search failed for {venue} {year}: {exc}")
             failures.append({

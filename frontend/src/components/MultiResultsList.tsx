@@ -281,7 +281,7 @@ export function MultiResultsList({ result, description }: Props) {
             .filter(v => v.status === 'ok')
             .map(v => (
               <VenueSection
-                key={v.venue}
+                key={`${v.venue}_${v.selected_year}`}
                 venue={v.venue}
                 selectedYear={v.selected_year}
                 papers={v.papers}

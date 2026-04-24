@@ -126,21 +126,23 @@ async def _evaluate_papers_parallel(
     max_concurrent: int = 10,
     use_chinese_reason: bool = True,
     model: str | None = None,
+    progress_callback: Any = None,
 ) -> list[dict]:
     """Evaluate papers in parallel with rate limiting."""
     semaphore = asyncio.Semaphore(max_concurrent)
     system_prompt = SYSTEM_PROMPT_ZH if use_chinese_reason else SYSTEM_PROMPT_EN
+    total = len(papers)
+    completed = 0
 
-    tasks = [
-        _evaluate_single(
-            paper,
-            research_description,
-            semaphore,
-            system_prompt,
-            model=model,
-        )
-        for paper in papers
-    ]
+    async def _eval_with_progress(paper: dict) -> dict:
+        nonlocal completed
+        result = await _evaluate_single(paper, research_description, semaphore, system_prompt, model=model)
+        completed += 1
+        if progress_callback:
+            progress_callback(completed, total)
+        return result
+
+    tasks = [_eval_with_progress(paper) for paper in papers]
     results = await asyncio.gather(*tasks, return_exceptions=True)
 
     evaluated = []
@@ -164,19 +166,9 @@ def evaluate_relevance(
     max_concurrent: int = 10,
     use_chinese_reason: bool = True,
     model: str | None = None,
+    progress_callback: Any = None,
 ) -> list[dict]:
-    """Evaluate and rank papers by relevance to research description.
-
-    Args:
-        papers: List of paper dicts (already pre-filtered by hybrid search)
-        research_description: Natural language description of research interests
-        top_k: Number of papers to return after LLM reranking
-        max_concurrent: Max concurrent LLM calls
-        model: LLM model name (uses env default if None)
-
-    Returns:
-        Papers sorted by relevance_score descending
-    """
+    """Evaluate and rank papers by relevance to research description."""
     candidates = papers
     logger.info(f"LLM evaluating {len(candidates)} papers for relevance (top_k hint: {top_k})...")
 
@@ -187,6 +179,7 @@ def evaluate_relevance(
             max_concurrent=max_concurrent,
             use_chinese_reason=use_chinese_reason,
             model=model,
+            progress_callback=progress_callback,
         )
     )
 
