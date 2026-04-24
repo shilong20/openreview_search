@@ -385,8 +385,8 @@ multiSearch: (params: {
 
 | 任务 | 改动 | 验证 | 提交 |
 |------|------|------|------|
-| Task 1: 后端 — 通用多会议检索函数 + /api/multi-search | ✓ | ✓ | ○ |
-| Task 2: 前端 — 类型定义 + API 客户端 | ○ | ○ | ○ |
-| Task 3: 前端 — MultiSearchPanel + 模式切换 | ○ | ○ | ○ |
-| Task 4: 前端 — MultiResultsList 分组/混合视图 | ○ | ○ | ○ |
-| Task 5: 集成 — 搜索历史兼容 + SKILL 更新 | ○ | ○ | ○ |
+| Task 1: 后端 — 通用多会议检索函数 + /api/multi-search | ✓ | ✓ | ✓ |
+| Task 2: 前端 — 类型定义 + API 客户端 | ✓ | ✓ | ✓ |
+| Task 3: 前端 — MultiSearchPanel + 模式切换 | ✓ | ✓ | ✓ |
+| Task 4: 前端 — MultiResultsList 分组/混合视图 | ✓ | ✓ | ✓ |
+| Task 5: 集成 — 搜索历史兼容 + SKILL 更新 | ✓ | ✓ | ✓ |

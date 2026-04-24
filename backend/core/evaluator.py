@@ -8,7 +8,7 @@ from typing import Any
 from langchain_core.messages import HumanMessage, SystemMessage
 from loguru import logger
 
-from .llm_client import create_llm, extract_text
+from .llm_client import ainvoke_text
 
 SYSTEM_PROMPT_ZH = """You are an expert academic paper evaluator. Your task is to assess how relevant a research paper is to a user's research interests.
 
@@ -84,9 +84,9 @@ def _parse_score(response_text: str) -> dict[str, Any]:
 async def _evaluate_single(
     paper: dict,
     research_description: str,
-    llm,
     semaphore: asyncio.Semaphore,
     system_prompt: str,
+    model: str | None = None,
 ) -> dict:
     """Evaluate a single paper's relevance."""
     async with semaphore:
@@ -105,8 +105,8 @@ async def _evaluate_single(
         ]
 
         try:
-            response = await llm.ainvoke(messages)
-            parsed = _parse_score(extract_text(response.content))
+            text = await ainvoke_text(messages, model=model, temperature=0.0, max_tokens=200)
+            parsed = _parse_score(text)
             relevance_score = max(0.0, min(1.0, float(parsed.get("relevance_score", 0.0))))
             relevance_reason = parsed.get("relevance_reason", "")
         except Exception as e:
@@ -128,12 +128,17 @@ async def _evaluate_papers_parallel(
     model: str | None = None,
 ) -> list[dict]:
     """Evaluate papers in parallel with rate limiting."""
-    llm = create_llm(model=model, temperature=0.0, max_tokens=200)
     semaphore = asyncio.Semaphore(max_concurrent)
     system_prompt = SYSTEM_PROMPT_ZH if use_chinese_reason else SYSTEM_PROMPT_EN
 
     tasks = [
-        _evaluate_single(paper, research_description, llm, semaphore, system_prompt)
+        _evaluate_single(
+            paper,
+            research_description,
+            semaphore,
+            system_prompt,
+            model=model,
+        )
         for paper in papers
     ]
     results = await asyncio.gather(*tasks, return_exceptions=True)

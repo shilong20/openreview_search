@@ -9,6 +9,8 @@ import os
 import sys
 from urllib import error, request
 
+DEFAULT_TIMEOUT_SECONDS = int(os.environ.get("OPENREVIEW_SEARCH_TIMEOUT_SECONDS", "600"))
+
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
@@ -36,7 +38,7 @@ def main() -> int:
     )
 
     try:
-        with request.urlopen(req, timeout=300) as resp:
+        with request.urlopen(req, timeout=DEFAULT_TIMEOUT_SECONDS) as resp:
             body = resp.read().decode("utf-8")
     except error.HTTPError as exc:
         detail = exc.read().decode("utf-8", errors="replace")

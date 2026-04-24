@@ -9,7 +9,7 @@ from typing import Any
 from langchain_core.messages import HumanMessage, SystemMessage
 from loguru import logger
 
-from .llm_client import create_llm, extract_text
+from .llm_client import ainvoke_text
 
 SYSTEM_PROMPT = """You are an expert academic translator.
 
@@ -67,8 +67,8 @@ def _parse_translation(response_text: str) -> dict[str, str]:
 
 async def _translate_single(
     paper: dict[str, Any],
-    llm,
     semaphore: asyncio.Semaphore,
+    model: str | None = None,
 ) -> dict[str, Any]:
     title = str(paper.get("title", "")).strip()
     abstract = str(paper.get("abstract", "")).strip()
@@ -91,8 +91,8 @@ async def _translate_single(
         ]
 
         try:
-            response = await llm.ainvoke(messages)
-            parsed = _parse_translation(extract_text(response.content))
+            text = await ainvoke_text(messages, model=model, temperature=0.0, max_tokens=1200)
+            parsed = _parse_translation(text)
             title_zh = parsed.get("title_zh", "") or title
             abstract_zh = parsed.get("abstract_zh", "") or abstract
         except Exception as e:
@@ -116,10 +116,9 @@ async def _translate_papers_parallel(
     if not papers:
         return []
 
-    llm = create_llm(model=model, temperature=0.0, max_tokens=1200)
     semaphore = asyncio.Semaphore(max_concurrent)
 
-    tasks = [_translate_single(p, llm, semaphore) for p in papers]
+    tasks = [_translate_single(p, semaphore, model=model) for p in papers]
     results = await asyncio.gather(*tasks, return_exceptions=True)
 
     translated: list[dict[str, Any]] = []

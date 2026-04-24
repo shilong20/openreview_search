@@ -6,7 +6,7 @@ import re
 from langchain_core.messages import HumanMessage, SystemMessage
 from loguru import logger
 
-from .llm_client import create_llm, extract_text
+from .llm_client import invoke_text
 
 SYSTEM_PROMPT = """You are a research keyword extraction expert. Given a research interest description, extract key terms and generate synonyms/related terms to improve search coverage.
 
@@ -39,15 +39,12 @@ def extract_keywords(description: str, model: str | None = None) -> dict[str, li
         dict with 'keywords' and 'expanded' lists
     """
     try:
-        llm = create_llm(model=model, temperature=0.0, max_tokens=500)
-
         messages = [
             SystemMessage(content=SYSTEM_PROMPT),
             HumanMessage(content=USER_PROMPT.format(description=description)),
         ]
 
-        response = llm.invoke(messages)
-        text = extract_text(response.content).strip()
+        text = invoke_text(messages, model=model, temperature=0.0, max_tokens=500).strip()
 
         # Try direct JSON parse
         try:
