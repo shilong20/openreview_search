@@ -36,36 +36,53 @@ async function sseRequest<T>(
   let buffer = ''
   let result: T | null = null
 
+  function processEvents(raw: string) {
+    const blocks = raw.split(/\n\n/)
+    for (const block of blocks) {
+      if (!block.trim()) continue
+      let eventType = ''
+      let dataLines: string[] = []
+      for (const line of block.split('\n')) {
+        if (line.startsWith('event: ')) {
+          eventType = line.slice(7).trim()
+        } else if (line.startsWith('data: ')) {
+          dataLines.push(line.slice(6))
+        } else if (line.startsWith('data:')) {
+          dataLines.push(line.slice(5))
+        }
+      }
+      if (dataLines.length === 0) continue
+      const data = dataLines.join('\n')
+      try {
+        const parsed = JSON.parse(data)
+        if (eventType === 'progress' && onProgress) {
+          onProgress(parsed as SearchProgress)
+        } else if (eventType === 'result') {
+          result = parsed as T
+        } else if (eventType === 'error') {
+          throw new Error(parsed.message || 'Search failed')
+        }
+      } catch (e) {
+        if (e instanceof SyntaxError) continue
+        throw e
+      }
+    }
+  }
+
   while (true) {
     const { done, value } = await reader.read()
     if (done) break
     buffer += decoder.decode(value, { stream: true })
 
-    const lines = buffer.split('\n')
-    buffer = lines.pop() || ''
-
-    let currentEvent = ''
-    for (const line of lines) {
-      if (line.startsWith('event: ')) {
-        currentEvent = line.slice(7).trim()
-      } else if (line.startsWith('data: ')) {
-        const data = line.slice(6)
-        try {
-          const parsed = JSON.parse(data)
-          if (currentEvent === 'progress' && onProgress) {
-            onProgress(parsed as SearchProgress)
-          } else if (currentEvent === 'result') {
-            result = parsed as T
-          } else if (currentEvent === 'error') {
-            throw new Error(parsed.message || 'Search failed')
-          }
-        } catch (e) {
-          if (e instanceof SyntaxError) continue
-          throw e
-        }
-        currentEvent = ''
-      }
+    const lastDoubleNewline = buffer.lastIndexOf('\n\n')
+    if (lastDoubleNewline !== -1) {
+      const complete = buffer.slice(0, lastDoubleNewline + 2)
+      buffer = buffer.slice(lastDoubleNewline + 2)
+      processEvents(complete)
     }
+  }
+  if (buffer.trim()) {
+    processEvents(buffer)
   }
 
   if (!result) throw new Error('No result received from server')
